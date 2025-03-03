@@ -8,6 +8,10 @@
  * Author: Zhan Zhang <zhan@aotol.com>
  */
 import React, { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm"; // Enables GitHub-style tables
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 export default function Home() {
     const [messages, setMessages] = useState([]);
@@ -166,12 +170,35 @@ export default function Home() {
     return (
         <div className="flex flex-col items-center min-h-screen p-4 bg-gray-100">
             <h1 className="text-2xl font-bold mb-4">AI Memory Booster Chat</h1>
-
             {/* Chat Window */}
             <div className="w-full max-w-2xl bg-white shadow-lg rounded-lg p-4 h-96 overflow-y-auto mb-4">
                 {messages.map((msg, index) => (
                     <div key={index} className={`p-2 my-1 ${msg.sender === "User" ? "text-blue-700" : "text-green-700"}`}>
-                        <strong>{msg.sender}: </strong> {msg.text}
+                        <div className="inline-flex">
+                            <strong>{msg.sender}: </strong>
+                            <ReactMarkdown
+                                remarkPlugins={[remarkGfm]} // Enables GitHub-style tables & formatting
+                                components={{
+                                    code({ node, inline, className, children, ...props }) {
+                                        const match = /language-(\w+)/.exec(className || "");
+                                        return !inline && match ? (
+                                            <SyntaxHighlighter
+                                                style={atomDark} // Dark theme for code blocks
+                                                language={match[1]}
+                                                PreTag="div"
+                                                {...props}
+                                            >
+                                                {String(children).replace(/\n$/, "")}
+                                            </SyntaxHighlighter>
+                                        ) : (
+                                            <code className="bg-gray-200 p-1 rounded">{children}</code>
+                                        );
+                                    }
+                                }}
+                            >
+                            {msg.text}
+                        </ReactMarkdown>
+                        </div>
                     </div>
                 ))}
                 <div ref={chatEndRef} />
