@@ -35,7 +35,7 @@ const memory = await AI_Memory.retrieveMemory("How's the weather today?");
 console.log(memory);
 ```
 **Response Example:**
-```json
+```js
 {
   "id": "99c326e8-e234-4049-8661-3d9427944071",
   "distance": 0.1, // The distance between the query and result (smaller is better)
@@ -85,7 +85,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
 
 ### Example `config.json`:
 
-```json
+```js
 {
   "aiModel": "llama3.2", // The primary AI model (must be downloaded first)
   "smallAiModel": "llama3.2:1b", // A lightweight AI model for subtasks (if enabled)
