@@ -1,0 +1,26 @@
+{
+  "name": "ai-memory-booster",
+  "version": "1.0.0",
+  "description": "AI Memory Booster - A memory-enhanced AI chat module with storage capabilities.",
+  "main": "core/index.js",
+  "bin": {
+    "ai-memory-booster": "./server/server.js"
+  },
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "keywords": ["AI", "memory", "chatbot", "embeddings", "LLM"],
+  "author": "Zhan Zhang",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.21.2",
+    "body-parser": "^1.20.3",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "faiss-node": "^0.5.1",
+    "chromadb": "^1.10.4",
+    "@langchain/ollama": "^0.2.0",
+    "ollama": "^0.5.14"
+  }
+}

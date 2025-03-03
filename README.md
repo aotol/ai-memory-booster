@@ -1,2 +1,171 @@
-# ai-memory-booster
-AI Memory Booster – A lightweight, embeddable AI memory module with persistent storage, vector embeddings, and chatbot integration. Open-source and extensible.
+# AI Memory Booster
+
+**AI Memory Booster** is an AI-powered memory enhancement module that enables **long-term AI memory** and retrieval of conversations using embeddings and vector databases.
+
+## 🚀 Features
+
+- **Memory Storage**: Store and retrieve long-term conversation history.
+- **Embeddings Support**: Utilize FAISS and ChromaDB for efficient AI memory.
+- **Flexible Deployment**: Use AI Memory Booster as an npm module or run it as an API service to make RESTful API calls.
+- **Built-in UI**: Manage configurations easily through the integrated UI component.
+- **Extensible & Open-Source**: Built for developers to integrate into AI chatbots and automation tools.
+
+## 📦 Installation
+
+Install via npm:
+
+```sh
+npm install ai-memory-booster
+```
+
+## 🎯 Usage
+
+AI Memory Booster provides the following methods:
+
+### Store Memory
+Injects a memory entry into AI Memory Booster.
+```js
+await AI_Memory.storeMemory("Today is Wednesday and it is raining", "Today is Wednesday, how's the weather?", "It is raining");
+```
+
+### Retrieve Memory
+Fetches relevant stored memories based on a user's message.
+```js
+const memory = await AI_Memory.retrieveMemory("How's the weather today?");
+console.log(memory);
+```
+**Response Example:**
+```json
+{
+  "id": "99c326e8-e234-4049-8661-3d9427944071",
+  "distance": 0.1, // The distance between the query and result (smaller is better)
+  "summary": "Today is Wednesday and it is raining",
+  "userMessage": "Today is Wednesday, how's the weather?",
+  "aiMessage": "It is raining",
+  "timestamp": 1740999657717
+}
+```
+
+### Forget Memory
+Deletes a memory entry by ID.
+```js
+const success = await AI_Memory.forget("99c326e8-e234-4049-8661-3d9427944071");
+console.log(success); // true if deleted, false if ID is null
+```
+
+### Forget All Memories
+Deletes all stored memory entries.
+```js
+const success = await AI_Memory.forgetAll();
+console.log(success); // true if deleted, false if no memories exist
+```
+
+### Get LLM Specification
+Retrieves details about the current LLM module.
+```js
+const llmSpec = await AI_Memory.getLlmSpec();
+console.log(llmSpec);
+```
+
+### Chat with AI Memory Booster
+Interacts with the AI while using stored memory.
+```js
+const response = await AI_Memory.chat("How's the weather today?");
+console.log(response); // "It is raining"
+```
+
+## 🛠 Configuration
+
+AI Memory Booster allows full customization through `config.json`. Users can modify AI model settings, server configurations, memory management, and ChromaDB parameters. The configuration can be updated in two ways:
+
+- **Directly modifying `config.json`**
+- **Using AI Memory Booster UI for easy configuration updates**
+
+AI Memory Booster allows full customization through `config.json`. Users can modify AI model settings, server configurations, memory management, and ChromaDB parameters.
+
+### Example `config.json`:
+
+```json
+{
+  "aiModel": "llama3.2", // The primary AI model (must be downloaded first)
+  "smallAiModel": "llama3.2:1b", // A lightweight AI model for subtasks (if enabled)
+  "enableSmallAI": true, // Enables a lightweight AI model for handling smaller tasks
+  "learnFromChat": false, // Determines if AI should learn from conversations
+  "host": "localhost", // The host address when running AI Memory Booster as an API service
+  "port": 4000, // The port for the AI Memory Booster API service
+  "baseKeepAlive": 3000, // Duration (ms) the LLM module stays active after each call
+  "extendedKeepAlive": 10000, // Extended duration (ms) the LLM remains active if no other requests arrive
+  "similarityResultCount": 3, // Number of similar records retrieved from the database
+  "categorySureThreshold": 49, // Threshold for AI to confidently classify a response
+  "summaryCharacterLimit": 256, // Maximum character length for conversation summaries
+  "dimension": 256, // Dimensionality of vector embeddings
+  "similarityThreshold": 0.7, // Threshold for similarity-based searches
+  "consolidateConversationThreshold": 256, // Threshold for summarizing conversations
+  "chromaDBHost": "http://localhost:8000", // ChromaDB service URL (host and port)
+  "tenant": "default_tenant", // ChromaDB tenant name
+  "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses." // Prompt for how AI should respond base on the past memory
+}
+```
+
+### ConfigManager Usage:
+
+Users can dynamically get and set configurations via `configManager`:
+
+```js
+const port = AI_Memory.configManager.getPort();
+console.log(`Running on port: ${port}`);
+
+AI_Memory.configManager.setPort(8080);
+console.log(`Updated port: ${AI_Memory.configManager.getPort()}`);
+```
+
+
+
+## 🔧 Development
+
+Also, ensure ChromaDB is running as a standalone service:
+
+```sh
+chroma run --path ./chroma_db
+```
+
+Clone and install dependencies:
+
+```sh
+git clone https://github.com/aotol/ai-memory-booster.git
+cd ai-memory-booster
+npm install
+```
+
+To start AI Memory Booster as a standalone API service:
+
+```sh
+ai-memory-booster start
+```
+
+To launch AI Memory Booster UI, go to:
+
+```sh
+cd ai-memory-booster/web/ai-memory-ui/
+npm run dev
+```
+Make sure you have set the environment variable: `AI_MEMORY_BOOSTER_API_URL` to identify where AI Memory Booster API service is running.
+e.g.: 
+```
+AI_MEMORY_BOOSTER_API_URL=http://localhost:4000
+```
+
+## 📜 License
+
+**MIT License** - Free for personal and research use. AI Memory Booster is open-source under the MIT License. If you require enterprise support or commercial licensing, please contact us.
+
+## 📩 Contact
+
+Author: **Aotol Pty Ltd**\
+Email: **[zhan@aotol.com](mailto\:zhan@aotol.com)**\
+Website: **[https://github.com/aotol/ai-memory-booster](https://github.com/aotol/ai-memory-booster)**
+
+---
+
+🚀 **Start building with AI Memory Booster today!**
+
