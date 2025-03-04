@@ -1,8 +1,8 @@
 {
   "aiModel": "llama3.2",
   "smallAiModel": "llama3.2:1b",
-  "enableSmallAI": true,
-  "learnFromChat": false,
+  "enableSmallAI": false,
+  "learnFromChat": true,
   "host": "localhost",
   "port": 4000,
   "baseKeepAlive": 3000,
