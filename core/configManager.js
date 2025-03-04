@@ -12,9 +12,9 @@ import path from 'path';
 const CONFIG_FILE = path.join( "./config.json"); // Ensure the file is stored in the same directory as `server.js`
 
 const DEFAULT_CONFIG = {
-    "aiModel": "llama3.2",
+    "aiModel": "llama3.2:latest",
     "smallAiModel": "llama3.2:1b",
-    "enableSmallAI": true,
+    "enableSmallAI": false,
     "learnFromChat": false,
     "host": "localhost",
     "port": 4000,
@@ -28,7 +28,8 @@ const DEFAULT_CONFIG = {
     "consolidateConversationThreshold": 200,
     "chromaDBHost": "http://localhost:8000",
     "tenant": "default_tenant",
-    "rolePrompt": "You are a personal assistant. The following is the conversation history to understand the background. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n"
+    "rolePrompt": "You are a personal assistant. The following is the conversation history to understand the background. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n",
+    "debug": false
 };
 
 if (!fs.existsSync(CONFIG_FILE)) {
@@ -79,6 +80,7 @@ const configManager = {
     getChromaDBHost: () => config.chromaDBHost,
     getTenant: () => config.tenant,
     getRolePrompt: () => config.rolePrompt,
+    isDebug: () => config.debug,
 
     // Setters
     setAiModel: (value) => { config.aiModel = value; saveConfig(config); },
@@ -98,6 +100,7 @@ const configManager = {
     setChromaDBHost: (value) => { config.chromaDBHost = value; saveConfig(config); },
     setTenant: (value) => { config.tenant = value; saveConfig(config); },
     setRolePrompt: (value) => { config.rolePrompt = value; saveConfig(config); },
+    setDebug: (value) => { config.debug = value; saveConfig(config); },
 
     // Get all config
     getAllConfig: () => config,

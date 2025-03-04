@@ -103,7 +103,8 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
   "consolidateConversationThreshold": 256, // Threshold for summarizing conversations
   "chromaDBHost": "http://localhost:8000", // ChromaDB service URL (host and port)
   "tenant": "default_tenant", // ChromaDB tenant name
-  "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses." // Prompt for how AI should respond base on the past memory
+  "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses.", // Prompt for how AI should respond base on the past memory
+  "debug": false // If turn on the debug message
 }
 ```
 

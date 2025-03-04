@@ -11,11 +11,11 @@ import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import faiss from "faiss-node";
 import { ChromaClient } from "chromadb";
-import { OllamaEmbeddings } from "@langchain/ollama";
 import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
+import {getEmbedding, ollamaEmbeddings} from "./llm.js";
 
-const ollamaEmbeddings = new OllamaEmbeddings({ model: "nomic-embed-text" });
+
 const collectionName = "ai_memory_booster"; // ChromaDB Collection
 let chromaClient;
 let collection;
@@ -222,11 +222,6 @@ async function isChromaDBAvailable() {
     } catch {
         return false;
     }
-}
-
-/** Get Text Embedding */
-async function getEmbedding(text) {
-    return await ollamaEmbeddings.embedQuery(text);
 }
 
 /** Initialize the module */

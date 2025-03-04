@@ -9,13 +9,16 @@
 import { Ollama } from "ollama";
 import configManager from "./configManager.js";
 import * as Memory from "./memory.js"
+import { log } from "./debug.js";
 let lastInteractionTime = Date.now();
 const llm = new Ollama();
 //const gossipMarker = "#gossip";
 const newKnowledgeMarker = "#new_knowledge";
 const updateKnowledgeMarker = "#new_update";
 const uncategorizedMarker = "#uncategorized";
-
+import { OllamaEmbeddings } from "@langchain/ollama";
+const nomicEmbedTextModel = "nomic-embed-text:latest";
+export const ollamaEmbeddings = new OllamaEmbeddings({ model: nomicEmbedTextModel });
 
 async function isUpdateMemoryRequired(conversationSet, userMessage) {
     let category = await categorizeUserMessage(conversationSet, userMessage);
@@ -33,7 +36,7 @@ async function isUpdateMemoryRequired(conversationSet, userMessage) {
 export async function chat(userMessage) {
     const conversationSet = [...(await Memory.readMemoryFromDB(userMessage, configManager.getSimilarityResultCount()))].sort((a, b) => a.timestamp - b.timestamp);
     let prompt = generatePrompt(conversationSet) + `===TASK START===\nNow respond: ${userMessage}`;
-    console.log(prompt);
+    log(prompt);
     let aiMessage = await callGenerateAI(prompt);
     const islearnFromChat = configManager.isLearnFromChat();
     if (islearnFromChat) {
@@ -142,7 +145,6 @@ export async function getNewKnowledgeMarkerCategoryScore(conversationSet, userMe
     "Only give the result and do not say anything else. " +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    //console.log(prompt);
     const score = await callSmallAI(prompt);
     return extractNumber(score);
 }
@@ -165,7 +167,6 @@ export async function getIsComplainScore(userMessage) {
     "Only give the result and do not say anything else. " +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    //console.log(prompt);
     const score = await callSmallAI(prompt);
     return extractNumber(score);
 }
@@ -186,7 +187,7 @@ export async function categorizeUserMessage(conversationSet, userMessage) {
             updateKnowledgeCategoryScore = await getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage);
             newKnowledgeCategoryScore = await getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage);
         }
-        console.log(`Question Score: ${askingQuestionCategoryScore} Gossip Score: ${gossipCategoryScore}, New Knowledge Score: ${newKnowledgeCategoryScore}, Update Knowledge Score: ${updateKnowledgeCategoryScore}, Complain Score: ${complainCategoryScore}`);
+        log(`Question Score: ${askingQuestionCategoryScore} Gossip Score: ${gossipCategoryScore}, New Knowledge Score: ${newKnowledgeCategoryScore}, Update Knowledge Score: ${updateKnowledgeCategoryScore}, Complain Score: ${complainCategoryScore}`);
         scores.set(updateKnowledgeMarker, updateKnowledgeCategoryScore);
         scores.set(newKnowledgeMarker, newKnowledgeCategoryScore);
         let maxScore = configManager.getCategorySureThreshold();  //At least needs to be over the threshold sure to pick the category
@@ -305,7 +306,6 @@ let summarizeConversation = async function(oldSummary, userMessage, aiMessage) {
     "===TASK START===\n" + 
     "Message: " + userMessage + "\n" + 
     "Response: " + aiMessage;
-    console.log(summarizePrompt);
     const summary = await callGenerateAI(summarizePrompt);
     return summary;
 }
@@ -314,3 +314,46 @@ function extractNumber(str) {
     const match = str.match(/\d+/); // Find the first sequence of digits
     return match ? parseInt(match[0], 10) : NaN;
 }
+
+/** Get Text Embedding */
+export async function getEmbedding(text) {
+    return await ollamaEmbeddings.embedQuery(text);
+}
+
+async function initialize() {
+    const llmName = configManager.getAiModel();
+    const smallLlmName = configManager.getSmallAiModel();
+    const llmList = await llm.list(); 
+    const llmModels = llmList.models;
+    log("Validating llm modules...");
+    let llmAvaialble = false;
+    let smallLlmAvailable = false;
+    let nomicEmbedTextAvailable = false
+    for (const model of llmModels) {
+        log(`Found llm module: ${model.model}`);
+        if (model.model === llmName) {
+            llmAvaialble = true;
+        } else if (model.model === smallLlmName) {
+            smallLlmAvailable = true;
+        } else if (model.model === nomicEmbedTextModel) {
+            nomicEmbedTextAvailable = true;
+        }
+    }
+    if (llmName && !llmAvaialble) {
+        log(`LLM ${llmName} is missing. Installing...`);
+        let pullresult = await llm.pull({model: llmName});
+        log(`LLM ${llmName} is installed: ${JSON.stringify(pullresult)}`);
+    }
+    if (smallLlmName && !smallLlmAvailable) {
+        log(`LLM ${smallLlmName} is missing. Installing...`);
+        let pullresult = await llm.pull({model: smallLlmName});
+        log(`LLM ${smallLlmName} is installed: ${JSON.stringify(pullresult)}`);
+    }
+    if (nomicEmbedTextModel && !nomicEmbedTextAvailable) {
+        log(`LLM ${nomicEmbedTextModel} is missing. Installing...`);
+        let pullresult = await llm.pull({model: nomicEmbedTextModel});
+        log(`LLM ${nomicEmbedTextModel} is installed: ${JSON.stringify(pullresult)}`);
+    }
+}
+
+await initialize();
