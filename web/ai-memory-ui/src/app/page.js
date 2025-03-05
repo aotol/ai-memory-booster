@@ -94,7 +94,6 @@ export default function Home() {
     // Retrieve Memory
     const retrieveMemory = async () => {
         if (!memoryQuery.trim()) return;
-
         try {
             const response = await fetch("/api/retrieve-memory", {
                 method: "POST",
@@ -139,6 +138,9 @@ export default function Home() {
     // Forget all stored memory
     const forgetMemory = async () => {
         try {
+            if (!confirm("Are you sure to delete all the memories?")) {
+                return;
+            }
             const response = await fetch("/api/forget", { method: "GET" });
             const data = await response.json();
             let responseMessage = data.message;
@@ -234,17 +236,6 @@ export default function Home() {
                 </button>
             </div>
 
-            <span>
-                {/* Forget Memory Button */}
-            <button className="mt-4 bg-red-500 text-white px-4 py-2 rounded-lg" onClick={forgetMemory}>
-                Forget Memory
-            </button>
-            &nbsp;
-            {/* Show LLM Spec Button */}
-            <button className="mt-4 bg-gray-600 text-white px-4 py-2 rounded-lg" onClick={fetchLlmSpec}>
-                Show LLM Spec
-            </button></span>
-
             {/* LLM Spec Modal */}
             {showSpec && llmSpec && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
@@ -301,6 +292,12 @@ export default function Home() {
                 <button className="bg-green-500 text-white px-4 py-2 rounded-lg mt-2" onClick={retrieveMemory}>
                     Retrieve
                 </button>
+                &nbsp;
+                {/* Forget Memory Button */}
+                <button className="mt-4 bg-red-500 text-white px-4 py-2 rounded-lg" onClick={forgetMemory}>
+                    Forget All Memories
+                </button>
+            &nbsp;
             </div>
 
             {/* Store Memory Section */}
@@ -346,6 +343,11 @@ export default function Home() {
                 <button className="bg-blue-500 text-white px-4 py-2 rounded-lg mt-2" onClick={updateConfig}>
                     Update Config
                 </button>
+                &nbsp;
+                {/* Show LLM Spec Button */}
+                <button className="mt-4 bg-gray-600 text-white px-4 py-2 rounded-lg" onClick={fetchLlmSpec}>
+                Show LLM Spec
+            </button>
             </div>
         </div>
     );
