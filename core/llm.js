@@ -18,11 +18,11 @@ const updateKnowledgeMarker = "#new_update";
 const uncategorizedMarker = "#uncategorized";
 import { OllamaEmbeddings } from "@langchain/ollama";
 const nomicEmbedTextModel = "nomic-embed-text:latest";
+const resultDrivingPrompt = "Only give the result and do not say anything else. ";
 export const ollamaEmbeddings = new OllamaEmbeddings({ model: nomicEmbedTextModel });
 
 async function isUpdateMemoryRequired(conversationSet, userMessage) {
     let category = await categorizeUserMessage(conversationSet, userMessage);
-    //const isGossip = category.includes(gossipMarker);
     const isNewKnowledge = category.includes(newKnowledgeMarker);
     const isNewUpdate = category.includes(updateKnowledgeMarker);
     if (isNewKnowledge || isNewUpdate) {
@@ -117,9 +117,9 @@ let generateAcknowledgment = async function (userMessage) {
 
 /** AI Categorization & Utility Functions */
 export async function getIsAskingQuestionScore(userMessage) {
-    let prompt= "Is this message a question? " + 
+    let prompt= "Is this message a question? (e.g., What is the time? Who are you? What's the weather like today?) " + 
     "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    "Only give the result and do not say anything else. " +
+    resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
     const score = await callSmallAI(prompt);
@@ -128,9 +128,9 @@ export async function getIsAskingQuestionScore(userMessage) {
 
 export async function getGossipMarkerCategoryScore(userMessage) {
     let prompt = configManager.getRolePrompt() + 
-    "Evaluate whether this message is a social check-in (e.g., 'Hi', 'Hello', 'How are you?', 'Are you there?', 'Good morning') or acknowledgement (e.g., 'Good', 'I see', 'OK') " + 
+    "Evaluate whether this message is only a social check-in (e.g., 'Hi', 'Hello', 'How are you?', 'Are you there?', 'Good morning') or acknowledgement (e.g., 'Good', 'I see', 'OK') " + 
     "Respond with a likelihood score from 0 to 100, where 100 means definitely a greeting, and 0 means definitely not. " + 
-    "Only give the result and do not say anything else. " +
+    resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
     const score = await callSmallAI(prompt);
@@ -140,9 +140,9 @@ export async function getGossipMarkerCategoryScore(userMessage) {
 export async function getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage) {
     let prompt = configManager.getRolePrompt() + 
     generateConversationHistoryPrompt(conversationSet) + 
-    "Has this message not been discussed in the conversation history and it is not a question or greeting such as 'Hi', 'How are you', 'Good morning'? " + 
+    "Has this message not been discussed in the conversation history? " + 
     "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    "Only give the result and do not say anything else. " +
+    resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
     const score = await callSmallAI(prompt);
@@ -152,9 +152,9 @@ export async function getNewKnowledgeMarkerCategoryScore(conversationSet, userMe
 export async function getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage) {
     let prompt= configManager.getRolePrompt() + 
     generateConversationHistoryPrompt(conversationSet) + 
-    "Does this message update or modify any existing information in the conversation history? " + 
+    "Does this message update any existing information in the conversation history? " + 
     "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    "Only give the result and do not say anything else. " +
+    resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
     const score = await callSmallAI(prompt);
@@ -162,9 +162,9 @@ export async function getUpdateKnowledgeMarkerCategoryScore(conversationSet, use
 }
 
 export async function getIsComplainScore(userMessage) {
-    let prompt= "Is this message a complain? " + 
+    let prompt= "Is this message a complain? (e.g.: I am not happy! you are so stupid! I've told you many times!) " + 
     "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    "Only give the result and do not say anything else. " +
+    resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
     const score = await callSmallAI(prompt);
@@ -174,30 +174,34 @@ export async function getIsComplainScore(userMessage) {
 /** Categorize Message */
 export async function categorizeUserMessage(conversationSet, userMessage) {
     let category = uncategorizedMarker;
-        let scores = new Map();
-        const askingQuestionCategoryScore = await getIsAskingQuestionScore(userMessage);
-        const complainCategoryScore = await getIsComplainScore(userMessage);
-        let gossipCategoryScore = 0;
-        let newKnowledgeCategoryScore = 0;
-        let updateKnowledgeCategoryScore = 0;
-        
-        if (askingQuestionCategoryScore < configManager.getCategorySureThreshold() || //The user is not asking a question
-            (askingQuestionCategoryScore >= configManager.getCategorySureThreshold() && complainCategoryScore > configManager.getCategorySureThreshold())) { //The user is asking a question but also complaining
-            gossipCategoryScore = await getGossipMarkerCategoryScore(userMessage) ?? 0;
-            updateKnowledgeCategoryScore = await getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage);
-            newKnowledgeCategoryScore = await getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage);
+    let scores = new Map();
+    const complainCategoryScore = await getIsComplainScore(userMessage);
+    let newKnowledgeCategoryScore = 0;
+    let updateKnowledgeCategoryScore = 0;
+    const gossipCategoryScore = await getGossipMarkerCategoryScore(userMessage);
+    const askingQuestionCategoryScore = await getIsAskingQuestionScore(userMessage);
+    const isAskingQuestion = askingQuestionCategoryScore > configManager.getCategorySureThreshold();
+    const isComplaining = complainCategoryScore > configManager.getCategorySureThreshold();
+    const isGossiping = gossipCategoryScore > configManager.getCategorySureThreshold();
+    if (
+        (!isGossiping && !isAskingQuestion) //The user is not gossiping and not asking a question
+        || //OR
+        isComplaining //The user is complaining
+    ) {
+        updateKnowledgeCategoryScore = await getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage);
+        newKnowledgeCategoryScore = await getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage);
+    }
+    log(`Gossip Score: ${gossipCategoryScore}, Question Score: ${askingQuestionCategoryScore}, New Knowledge Score: ${newKnowledgeCategoryScore}, Update Knowledge Score: ${updateKnowledgeCategoryScore}, Complain Score: ${complainCategoryScore}`);
+    scores.set(updateKnowledgeMarker, updateKnowledgeCategoryScore);
+    scores.set(newKnowledgeMarker, newKnowledgeCategoryScore);
+    let maxScore = configManager.getCategorySureThreshold();  //At least needs to be over the threshold sure to pick the category
+    scores.forEach((value, key) => {
+        if (value > maxScore) {
+            maxScore = value;
+            category = key;
         }
-        log(`Question Score: ${askingQuestionCategoryScore} Gossip Score: ${gossipCategoryScore}, New Knowledge Score: ${newKnowledgeCategoryScore}, Update Knowledge Score: ${updateKnowledgeCategoryScore}, Complain Score: ${complainCategoryScore}`);
-        scores.set(updateKnowledgeMarker, updateKnowledgeCategoryScore);
-        scores.set(newKnowledgeMarker, newKnowledgeCategoryScore);
-        let maxScore = configManager.getCategorySureThreshold();  //At least needs to be over the threshold sure to pick the category
-        scores.forEach((value, key) => {
-            if (value > maxScore) {
-                maxScore = value;
-                category = key;
-            }
-        });
-        return category;
+    });
+    return category;
 }
 
 /** Consolidate Conversation */

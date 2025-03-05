@@ -109,6 +109,21 @@ export default function Home() {
         }
     };
 
+    const handleDeleteMemory = async (id) => {
+        try {
+            const response = await fetch(`/api/forget?id=${id}`, { method: "GET" });
+            if (response.ok) {
+                setRetrievedMemories((prevMemories) => prevMemories.filter((memory) => memory.id !== id));
+            } else {
+                alert("Failed to delete memory");
+                console.error("Failed to delete memory");
+            }
+        } catch (error) {
+            alert(error);
+            console.error("Error deleting memory:", error);
+        }
+    };
+
     // Fetch LLM Model Specs
     const fetchLlmSpec = async () => {
         try {
@@ -262,14 +277,20 @@ export default function Home() {
                         retrievedMemories.map((memory, index) => (
                             <div key={index} className="p-2 border-b">
                                 <div className="text-xs text-gray-500">
+                                    {/* Delete button using Unicode cross (✖) */}
+                                    <span><button
+                                        onClick={() => handleDeleteMemory(memory.id)}
+                                        className="text-red-500 hover:text-red-700 ml-0 p-1 rounded-full"
+                                        aria-label="Delete Memory"
+                                    >✖</button></span>
                                     <span>{new Date(memory.timestamp).toLocaleString()}</span>&nbsp;|&nbsp;
                                     <span>{memory.id}</span>
                                 </div>
                                 <strong>Summary:</strong> {memory.summary}
                                 <br />
-                                <span className="text-blue-700"><strong>User:</strong> {memory.userMessage}</span>
+                                <span className="text-blue-700"><strong>User:&nbsp;</strong> {memory.userMessage}</span>
                                 <br />
-                                <span className="text-green-700"><strong>AI:</strong> {memory.aiMessage}</span>
+                                <span className="text-green-700"><strong>AI:&nbsp;</strong> {memory.aiMessage}</span>
                             </div>
                         ))
                     ) : (

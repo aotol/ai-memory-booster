@@ -6,8 +6,15 @@
  * 
  * Author: Zhan Zhang <zhan@aotol.com>
  */
-export async function GET() {
-    const response = await fetch(`${process.env.AI_MEMORY_BOOSTER_API_URL}/forget`, { method: "GET" });
+
+export async function GET(request) {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams?.get("id");
+    const apiUrl = id
+    ? `${process.env.AI_MEMORY_BOOSTER_API_URL}/forget?id=${id}`
+    : `${process.env.AI_MEMORY_BOOSTER_API_URL}/forget`;
+    const response = await fetch(apiUrl, { method: "GET" });
     const data = await response.json();
     return Response.json(data);
+
 }
