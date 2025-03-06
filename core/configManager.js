@@ -23,7 +23,7 @@ const DEFAULT_CONFIG = {
     "similarityResultCount": 3,
     "categorySureThreshold": 49,
     "summaryCharacterLimit": 256,
-    "dimension": 768,
+    "dimension": 256,
     "similarityThreshold": 0.7,
     "consolidateConversationThreshold": 256,
     "chromaDBHost": "http://localhost:8000",

@@ -370,10 +370,47 @@ export async function getEmbedding(text) {
     return await ollamaEmbeddings.embedQuery(text);
 }
 
-export function reduceEmbedding(embedding) {
-    const truncatedEmbedding = embedding.slice(0, configManager.getDimension());
-    return truncatedEmbedding;
+/**
+ * Preserves relative vector values. Loses dimensions
+ * @param {*} embedding 
+ * @param {*} targetDimension 
+ * @returns 
+ */
+export function normalizeAndTruncate(embedding, targetDimension) {
+    const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
+
+    if (norm === 0) return embedding.slice(0, targetDimension); // Prevent division by zero
+
+    const normalizedEmbedding = embedding.map(val => val / norm);
+    return normalizedEmbedding.slice(0, targetDimension);
 }
+
+/**
+ * Captures info from start & end. Arbitrary splitting.
+ * @param {*} embedding 
+ * @param {*} targetDimension 
+ * @returns 
+ */
+export function weightedTruncate(embedding, targetDimension = 256) {
+    const halfDim = Math.floor(targetDimension / 2);
+    return embedding.slice(0, halfDim).concat(embedding.slice(-halfDim));
+}
+
+/**
+ * Keeps overall vector structure. Slight loss of granularity
+ * @param {*} embedding 
+ * @param {*} targetDimension 
+ * @returns 
+ */
+export function averagePoolingTruncate(embedding, targetDimension = 256) {
+    const factor = Math.floor(embedding.length / targetDimension);
+    
+    return Array.from({ length: targetDimension }, (_, i) =>
+        embedding.slice(i * factor, (i + 1) * factor)
+                 .reduce((sum, val) => sum + val, 0) / factor
+    );
+}
+
 
 async function initialize() {
     const llmName = configManager.getAiModel();

@@ -13,7 +13,7 @@ import faiss from "faiss-node";
 import { ChromaClient } from "chromadb";
 import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
-import {getEmbedding, reduceEmbedding, ollamaEmbeddings} from "./llm.js";
+import {getEmbedding, ollamaEmbeddings, normalizeAndTruncate} from "./llm.js";
 import {log} from "./debug.js";
 
 const collectionName = "ai_memory_booster"; // ChromaDB Collection
@@ -75,7 +75,7 @@ export async function cacheMemory(userMessage, aiMessage) {
         }
 
         // Check the expected dimension
-        const reducedEmbedding = configManager.getDimension() != embedding.length ?reduceEmbedding(embedding) : embedding;
+        const reducedEmbedding = configManager.getDimension() != embedding.length ?normalizeAndTruncate(embedding, configManager.getDimension()) : embedding;
 
         // Validate dimensions before inserting
         if (reducedEmbedding.length !== configManager.getDimension()) {
@@ -162,10 +162,11 @@ export async function forget(id) {
 
 export async function readMemoryFromCache (userMessage, similarityResultCount) {
     const queryVector = await getEmbedding(userMessage);
+    const reducedQueryVector = configManager.getDimension() != queryVector.length ?normalizeAndTruncate(queryVector, configManager.getDimension()) : queryVector;
     // Retrieve from FAISS
     const ntotal = cache.ntotal();
     const faissResults = ntotal > 0 
-        ? cache.search(queryVector, Math.min(ntotal, similarityResultCount)) 
+        ? cache.search(reducedQueryVector, Math.min(ntotal, similarityResultCount)) 
         : [];
 
     const conversationSet = new Set();
