@@ -12,8 +12,20 @@
 
 ## 📦 Installation
 
-Install via npm:
+### Pre-requisites
+Before running AI Memory Booster, ensure that you have **Ollama** and **ChromaDB** installed.
 
+#### Install Ollama
+Follow the official installation guide at: [https://ollama.ai/](https://ollama.ai/)
+
+#### Install ChromaDB
+Ensure ChromaDB is installed and running:
+```sh
+pip install chromadb
+chroma run --path ./chroma_db
+```
+
+### Install AI Memory Booster via npm:
 ```sh
 npm install ai-memory-booster
 ```
@@ -81,8 +93,6 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
 - **Directly modifying `config.json`**
 - **Using AI Memory Booster UI for easy configuration updates**
 
-AI Memory Booster allows full customization through `config.json`. Users can modify AI model settings, server configurations, memory management, and ChromaDB parameters.
-
 ### Example `config.json`:
 
 ```js
@@ -103,7 +113,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
   "consolidateConversationThreshold": 256, // Threshold for summarizing conversations
   "chromaDBHost": "http://localhost:8000", // ChromaDB service URL (host and port)
   "tenant": "default_tenant", // ChromaDB tenant name
-  "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses.", // Prompt for how AI should respond base on the past memory
+  "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses.", // Prompt for how AI should respond based on past memory
   "debug": false // If turn on the debug message
 }
 ```
@@ -120,18 +130,9 @@ AI_Memory.configManager.setPort(8080);
 console.log(`Updated port: ${AI_Memory.configManager.getPort()}`);
 ```
 
-
-
 ## 🔧 Development
 
-Also, ensure ChromaDB is running as a standalone service:
-
-```sh
-chroma run --path ./chroma_db
-```
-
 Clone and install dependencies:
-
 ```sh
 git clone https://github.com/aotol/ai-memory-booster.git
 cd ai-memory-booster
@@ -139,19 +140,17 @@ npm install
 ```
 
 To start AI Memory Booster as a standalone API service:
-
 ```sh
 ai-memory-booster start
 ```
 
 To launch AI Memory Booster UI, go to:
-
 ```sh
 cd ai-memory-booster/web/ai-memory-ui/
 npm run dev
 ```
 Make sure you have set the environment variable: `AI_MEMORY_BOOSTER_API_URL` to identify where AI Memory Booster API service is running.
-e.g.: 
+e.g.:
 ```
 AI_MEMORY_BOOSTER_API_URL=http://localhost:4000
 ```
@@ -163,7 +162,7 @@ AI_MEMORY_BOOSTER_API_URL=http://localhost:4000
 ## 📩 Contact
 
 Author: **Aotol Pty Ltd**\
-Email: **[zhan@aotol.com](mailto\:zhan@aotol.com)**\
+Email: **[zhan@aotol.com](mailto:zhan@aotol.com)**\
 Website: **[https://github.com/aotol/ai-memory-booster](https://github.com/aotol/ai-memory-booster)**
 
 ---
