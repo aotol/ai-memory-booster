@@ -192,7 +192,7 @@ export default function Home() {
                 {messages.map((msg, index) => (
                     <div key={index} className={`p-2 my-1 ${msg.sender === "User" ? "text-blue-700" : "text-green-700"}`}>
                         <div className="inline-flex">
-                            <strong>{msg.sender}: </strong>
+                            <strong>{msg.sender}:&nbsp;</strong>
                             <ReactMarkdown
                                 remarkPlugins={[remarkGfm]} // Enables GitHub-style tables & formatting
                                 components={{

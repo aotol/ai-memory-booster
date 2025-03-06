@@ -19,6 +19,7 @@ const uncategorizedMarker = "#uncategorized";
 import { OllamaEmbeddings } from "@langchain/ollama";
 const nomicEmbedTextModel = "nomic-embed-text:latest";
 const resultDrivingPrompt = "Only give the result and do not say anything else. ";
+const categoryReasonPrompt = "Also explain why you give this score. ";
 export const ollamaEmbeddings = new OllamaEmbeddings({ model: nomicEmbedTextModel });
 
 async function isUpdateMemoryRequired(conversationSet, userMessage) {
@@ -32,9 +33,19 @@ async function isUpdateMemoryRequired(conversationSet, userMessage) {
     }
 }
 
+function mergeConversationSet(conversationSetA, conversationSetB) {
+    // Merge both sets
+    let mergedSet = [...conversationSetA, ...conversationSetB];
+    // Sort by timestamp (ascending order)
+    mergedSet.sort((a, b) => a.timestamp - b.timestamp);
+    return mergedSet;
+}
+
 /** AI Chat */
 export async function chat(userMessage) {
-    const conversationSet = [...(await Memory.readMemoryFromDB(userMessage, configManager.getSimilarityResultCount()))].sort((a, b) => a.timestamp - b.timestamp);
+    const conversationDBSet = await Memory.readMemoryFromDB(userMessage, configManager.getSimilarityResultCount());
+    const conversationCacheSet = await Memory.readMemoryFromCache(userMessage, configManager.getSimilarityResultCount());
+    const conversationSet = mergeConversationSet(conversationDBSet, conversationCacheSet);
     let prompt = generatePrompt(conversationSet) + `===TASK START===\nNow respond: ${userMessage}`;
     log(prompt);
     let aiMessage = await callGenerateAI(prompt);
@@ -42,6 +53,9 @@ export async function chat(userMessage) {
     if (islearnFromChat) {
         aiMessage = await learnFromChat(conversationSet, userMessage, aiMessage);
     }
+    const shortenUserMessage = userMessage.trim();//(userMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(userMessage) : userMessage.trim();
+    const shortenAirMessage = aiMessage.trim(); //(aiMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(aiMessage) : aiMessage.trim();
+    await Memory.cacheMemory(shortenUserMessage, shortenAirMessage);
     return aiMessage;
 }
 
@@ -117,58 +131,83 @@ let generateAcknowledgment = async function (userMessage) {
 
 /** AI Categorization & Utility Functions */
 export async function getIsAskingQuestionScore(userMessage) {
-    let prompt= "Is this message a question? (e.g., What is the time? Who are you? What's the weather like today?) " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    resultDrivingPrompt +
+    let prompt= "Is this message asking a question? (e.g., What is the time? Who are you? What's the weather like today? What do you work?) " + 
+    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message is asking question, and 0 means definitely this message is not asking question. " + 
+    categoryReasonPrompt +
+    //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const score = await callSmallAI(prompt);
-    return extractNumber(score);
+    const result = await callSmallAI(prompt);
+    const score = extractNumber(result);
+    if (score > configManager.getCategorySureThreshold()) {
+        log(`### Is it a question? ${result}`);
+    }
+    return score;
 }
 
 export async function getGossipMarkerCategoryScore(userMessage) {
-    let prompt = configManager.getRolePrompt() + 
-    "Evaluate whether this message is only a social check-in (e.g., 'Hi', 'Hello', 'How are you?', 'Are you there?', 'Good morning') or acknowledgement (e.g., 'Good', 'I see', 'OK') " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means definitely a greeting, and 0 means definitely not. " + 
-    resultDrivingPrompt +
+    let prompt =
+    "Evaluate whether this message is only a social check-in (e.g., 'Hi', 'Hello', 'How are you?', 'Are you there?', 'Good morning') or acknowledgement (e.g., 'Good', 'I see', 'OK'). " + 
+    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message is a check-in, and 0 means definitely this message is not a check-in. " + 
+    categoryReasonPrompt +
+    //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const score = await callSmallAI(prompt);
-    return extractNumber(score);
+    const result = await callSmallAI(prompt);
+    const score = extractNumber(result);
+    if (score > configManager.getCategorySureThreshold()) {
+        log(`### Is it a gossip? ${result}`);
+    }
+    return score;
 }
 
 export async function getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage) {
     let prompt = configManager.getRolePrompt() + 
     generateConversationHistoryPrompt(conversationSet) + 
     "Has this message not been discussed in the conversation history? " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    resultDrivingPrompt +
+    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message has not been discussed in the conversation history, and 0 means this message has definitly discussed in the conversation history. " + 
+    categoryReasonPrompt +
+    //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const score = await callSmallAI(prompt);
-    return extractNumber(score);
+    const result = await callSmallAI(prompt);
+    const score = extractNumber(result);
+    if (score > configManager.getCategorySureThreshold()) {
+        log(`### Is it a new knowledge? ${result}`);
+    }
+    return score;
 }
 
 export async function getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage) {
     let prompt= configManager.getRolePrompt() + 
     generateConversationHistoryPrompt(conversationSet) + 
     "Does this message update any existing information in the conversation history? " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    resultDrivingPrompt +
+    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message updates existing information in the conversation history, and 0 means definitely this message does not update any exisiting information in te conversation history. " + 
+    categoryReasonPrompt +
+    //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const score = await callSmallAI(prompt);
-    return extractNumber(score);
+    const result = await callSmallAI(prompt);
+    const score = extractNumber(result);
+    if (score > configManager.getCategorySureThreshold()) {
+        log(`### Is it a knowldge update? ${result}`);
+    }
+    return score;
 }
 
 export async function getIsComplainScore(userMessage) {
     let prompt= "Is this message a complain? (e.g.: I am not happy! you are so stupid! I've told you many times!) " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% sure, and 0 means definitely not. " + 
-    resultDrivingPrompt +
+    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message is a complain, and 0 means definitely this mssage is not a complain. " + 
+    categoryReasonPrompt +
+    //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const score = await callSmallAI(prompt);
-    return extractNumber(score);
+    const result = await callSmallAI(prompt);
+    const score = extractNumber(result);
+    if (score > configManager.getCategorySureThreshold()) {
+        log(`### Is it a complain? ${result}`);
+    }
+    return score;
 }
 
 /** Categorize Message */
@@ -204,9 +243,16 @@ export async function categorizeUserMessage(conversationSet, userMessage) {
     return category;
 }
 
+async function shortenMessage(message) {
+    let shortenPrompt = "Shorten this message, " +
+    resultDrivingPrompt;
+    message = message.replace(/[\n\r]/g, ' ').trim();
+    message = (await callGenerateAI(`${shortenPrompt}${message}`)).trim();
+    return message;
+}
+
 /** Consolidate Conversation */
 export async function consolidateConversation(conversationSet) {
-    let shortenPrompt = "Shorten this message, only give the result and do not say anything else: ";
     const newConversationSet = new Set();
     for (const conversation of conversationSet) {
         let summary = conversation.summary.replace(/[\n\r]/g, ' ').trim();
@@ -214,10 +260,10 @@ export async function consolidateConversation(conversationSet) {
         let aiMessage = conversation.aiMessage.replace(/[\n\r]/g, ' ').trim();
         summary = await summarizeConversation(summary, userMessage, aiMessage);
         if (userMessage.length > configManager.getConsolidateConversationThreshold()) {
-            userMessage = (await callGenerateAI(`${shortenPrompt}${userMessage}`)).trim();
+            userMessage = await shortenMessage(userMessage);
         }
         if (aiMessage.length > configManager.getConsolidateConversationThreshold()) {
-            aiMessage = (await callGenerateAI(`${shortenPrompt}${aiMessage}`)).trim();
+            aiMessage = await shortenMessage(aiMessage);
         }
         newConversationSet.add({summary, userMessage, aiMessage});
     }
@@ -322,6 +368,11 @@ function extractNumber(str) {
 /** Get Text Embedding */
 export async function getEmbedding(text) {
     return await ollamaEmbeddings.embedQuery(text);
+}
+
+export function reduceEmbedding(embedding) {
+    const truncatedEmbedding = embedding.slice(0, configManager.getDimension());
+    return truncatedEmbedding;
 }
 
 async function initialize() {

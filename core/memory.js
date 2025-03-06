@@ -13,14 +13,15 @@ import faiss from "faiss-node";
 import { ChromaClient } from "chromadb";
 import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
-import {getEmbedding, ollamaEmbeddings} from "./llm.js";
-
+import {getEmbedding, reduceEmbedding, ollamaEmbeddings} from "./llm.js";
+import {log} from "./debug.js";
 
 const collectionName = "ai_memory_booster"; // ChromaDB Collection
 let chromaClient;
 let collection;
 let sqlite;
 let cache;
+let memoryMetadata = []; // Store {id, userMessage, aiMessage} pairs
 
 /** Initialize SQLite */
 async function initializeSqlite() {
@@ -53,6 +54,7 @@ async function initializeChromaDB() {
 /** Initialize FAISS cache */
 function initializeCache() {
     cache = new faiss.IndexFlatL2(configManager.getDimension());
+    memoryMetadata = [];
 }
 
 /** Initialize all services */
@@ -61,6 +63,44 @@ async function initialize() {
     await initializeChromaDB();
     initializeCache();
 }
+
+export async function cacheMemory(userMessage, aiMessage) {
+    try {
+        // Convert userMessage to an embedding vector
+        const embedding = await getEmbedding(userMessage);
+
+        if (!embedding || embedding.length === 0) {
+            console.error("Error: Generated embedding is empty.");
+            return;
+        }
+
+        // Check the expected dimension
+        const reducedEmbedding = configManager.getDimension() != embedding.length ?reduceEmbedding(embedding) : embedding;
+
+        // Validate dimensions before inserting
+        if (reducedEmbedding.length !== configManager.getDimension()) {
+            console.error(`Error: Embedding dimension mismatch. Expected ${cache.d}, got ${embedding.length}`);
+            return;
+        }
+
+        // Add vector to FAISS cache
+        cache.add(reducedEmbedding);
+
+        // Get the updated index count after insertion
+        const id = cache.ntotal() - 1;
+        const timestamp = Date.now();
+
+        // Store metadata separately
+        memoryMetadata.push({ id, userMessage, aiMessage, timestamp });
+        log("Memory cached successfully.");
+
+    } catch (error) {
+        console.error("Error caching memory:", error);
+    }
+}
+
+
+
 
 /** Store Memory */
 export async function storeMemory(summary, userMessage, aiMessage) {
@@ -104,6 +144,7 @@ export async function forgetAll() {
     } else {
         await sqlite.run("DELETE FROM memories");
     }
+    initializeCache();  //reset cache
     return true;
 }
 
@@ -119,15 +160,38 @@ export async function forget(id) {
     return true;
 }
 
-let retrieveRelevantMemoryFromCache = async function (userMessage) {
+export async function readMemoryFromCache (userMessage, similarityResultCount) {
     const queryVector = await getEmbedding(userMessage);
     // Retrieve from FAISS
     const ntotal = cache.ntotal();
     const faissResults = ntotal > 0 
-        ? cache.search(queryVector, Math.min(ntotal, configManager.getSimilarityResultCount())) 
+        ? cache.search(queryVector, Math.min(ntotal, similarityResultCount)) 
         : [];
-    return faissResults;
+
+    const conversationSet = new Set();
+    const { distances, labels } = faissResults;
+    let i = 0;
+    if (labels) {
+        labels.forEach(label => {
+            const distance = distances[i] ?? Infinity;
+            const id = label;
+            const result = getMemoryById(id);
+            const summary = result.userMessage || "";
+            const userMessage = result.userMessage || "";
+            const aiMessage = result.aiMessage || "";
+            const timestamp = result.timestamp || 0;
+            conversationSet.add({summary, id, distance, userMessage, aiMessage, timestamp});
+            i ++;
+        });
+    }
+    
+    return conversationSet;
 }
+
+function getMemoryById(id) {
+    return memoryMetadata.find(memory => memory.id === id);
+}
+
 
 /** Read Memory */
 export async function readMemoryFromDB (userMessage, similarityResultCount) {
@@ -143,12 +207,12 @@ export async function readMemoryFromDB (userMessage, similarityResultCount) {
         });
         rawResults = convertChromaResultToConversationSet(chromaResult);
     } else {
-        const faissResult = await retrieveRelevantMemoryFromCache(userMessage);
-        const { distances, indices } = faissResult;
+        const faissResult = await readMemoryFromCache(userMessage, similarityResultCount);
+        const { distances, indices: lables } = faissResult;
         let sqliteResult = [];
-        for (let i = 0; indices && i < indices.length; i++) {
-            if (indices[i] >= 0) {
-                const row = await sqlite.get("SELECT * FROM memories WHERE rowid = ?", [indices[i] + 1]);
+        for (let i = 0; lables && i < lables.length; i++) {
+            if (lables[i] >= 0) {
+                const row = await sqlite.get("SELECT * FROM memories WHERE rowid = ?", [lables[i] + 1]);
                 if (row) {
                     sqliteResult.push({
                         id: row.id,
