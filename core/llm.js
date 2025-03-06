@@ -16,10 +16,10 @@ const llm = new Ollama();
 const newKnowledgeMarker = "#new_knowledge";
 const updateKnowledgeMarker = "#new_update";
 const uncategorizedMarker = "#uncategorized";
-import { OllamaEmbeddings } from "@langchain/ollama";
 const nomicEmbedTextModel = "nomic-embed-text:latest";
 const resultDrivingPrompt = "Only give the result and do not say anything else. ";
 const categoryReasonPrompt = "Also explain why you give this score. ";
+import { OllamaEmbeddings } from "@langchain/ollama";
 export const ollamaEmbeddings = new OllamaEmbeddings({ model: nomicEmbedTextModel });
 
 async function isUpdateMemoryRequired(conversationSet, userMessage) {
@@ -125,7 +125,7 @@ let generateAcknowledgment = async function (userMessage) {
         "You are a personal assistant, do not say something like 'will be reviewed by our team'. " +
         "Only give the response, do not say anything else.\nHere is the message: " +
         userMessage;
-    const acknowledgment = await callSmallAI(prompt);
+    const acknowledgment = await callGenerateAI(prompt);
     return acknowledgment;
 };
 
@@ -137,7 +137,7 @@ export async function getIsAskingQuestionScore(userMessage) {
     //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const result = await callSmallAI(prompt);
+    const result = await callGenerateAI(prompt);
     const score = extractNumber(result);
     if (score > configManager.getCategorySureThreshold()) {
         log(`### Is it a question? ${result}`);
@@ -153,7 +153,7 @@ export async function getGossipMarkerCategoryScore(userMessage) {
     //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const result = await callSmallAI(prompt);
+    const result = await callGenerateAI(prompt);
     const score = extractNumber(result);
     if (score > configManager.getCategorySureThreshold()) {
         log(`### Is it a gossip? ${result}`);
@@ -170,7 +170,7 @@ export async function getNewKnowledgeMarkerCategoryScore(conversationSet, userMe
     //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const result = await callSmallAI(prompt);
+    const result = await callGenerateAI(prompt);
     const score = extractNumber(result);
     if (score > configManager.getCategorySureThreshold()) {
         log(`### Is it a new knowledge? ${result}`);
@@ -187,7 +187,7 @@ export async function getUpdateKnowledgeMarkerCategoryScore(conversationSet, use
     //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const result = await callSmallAI(prompt);
+    const result = await callGenerateAI(prompt);
     const score = extractNumber(result);
     if (score > configManager.getCategorySureThreshold()) {
         log(`### Is it a knowldge update? ${result}`);
@@ -202,7 +202,7 @@ export async function getIsComplainScore(userMessage) {
     //resultDrivingPrompt +
     "===TASK START===\n" + 
     "Message: " + userMessage;
-    const result = await callSmallAI(prompt);
+    const result = await callGenerateAI(prompt);
     const score = extractNumber(result);
     if (score > configManager.getCategorySureThreshold()) {
         log(`### Is it a complain? ${result}`);
@@ -283,6 +283,7 @@ export async function getLlmSpec() {
 }
 
 /**
+* @deprecated Do not use. Use callGenerateAI instead.
 * Defends on enableSmallAI's value, use smallAiModel
 * @param {*} prompt 
 * @returns 
@@ -317,14 +318,15 @@ let generateConversationHistoryPrompt = function (conversationSet) {
     let prompt = //"### **Conversation History:**\n" + 
     "Conversation History Start:\n";
     conversationSet.forEach(conversation => {
-        prompt += `${conversation.summary}\n`;
+        prompt += `Message: ${conversation.userMessage}\n`;
+        prompt += `Response: ${conversation.aiMessage}\n`;
     });
     prompt += "Conversation History End.\n";
     return prompt;
 }
 
 let getDynamicKeepAlive = function () {
-    return (Date.now() - lastInteractionTime < 5000) ? configManager.getExtendedKeepAlive() : configManager.getBaseKeepAlive();
+    return ((Date.now() - lastInteractionTime) < configManager.getBaseKeepAlive()) ? configManager.getExtendedKeepAlive() : configManager.getBaseKeepAlive();
 };
 
 /** AI Call */
@@ -363,11 +365,6 @@ let summarizeConversation = async function(oldSummary, userMessage, aiMessage) {
 function extractNumber(str) {
     const match = str.match(/\d+/); // Find the first sequence of digits
     return match ? parseInt(match[0], 10) : NaN;
-}
-
-/** Get Text Embedding */
-export async function getEmbedding(text) {
-    return await ollamaEmbeddings.embedQuery(text);
 }
 
 /**

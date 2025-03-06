@@ -13,7 +13,7 @@ import faiss from "faiss-node";
 import { ChromaClient } from "chromadb";
 import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
-import {getEmbedding, ollamaEmbeddings, normalizeAndTruncate} from "./llm.js";
+import {ollamaEmbeddings, normalizeAndTruncate} from "./llm.js";
 import {log} from "./debug.js";
 
 const collectionName = "ai_memory_booster"; // ChromaDB Collection
@@ -46,7 +46,10 @@ async function initializeChromaDB() {
     chromaClient = new ChromaClient({ path: configManager.getChromaDBHost(), tenant: configManager.getTenant() });
     collection = await chromaClient.getOrCreateCollection({
         name: collectionName,
-        embeddingFunction: ollamaEmbeddings,
+        embeddingFunction: async (text) => {
+            const embedding = await ollamaEmbeddings.embedQuery(text);
+            return embedding;
+        },
         dimension: configManager.getDimension(),
     });
 }
@@ -67,7 +70,7 @@ async function initialize() {
 export async function cacheMemory(userMessage, aiMessage) {
     try {
         // Convert userMessage to an embedding vector
-        const embedding = await getEmbedding(userMessage);
+        const embedding = await ollamaEmbeddings.embedQuery(userMessage);
 
         if (!embedding || embedding.length === 0) {
             console.error("Error: Generated embedding is empty.");
@@ -75,7 +78,7 @@ export async function cacheMemory(userMessage, aiMessage) {
         }
 
         // Check the expected dimension
-        const reducedEmbedding = configManager.getDimension() != embedding.length ?normalizeAndTruncate(embedding, configManager.getDimension()) : embedding;
+        const reducedEmbedding = adjustVectorSize(embedding);
 
         // Validate dimensions before inserting
         if (reducedEmbedding.length !== configManager.getDimension()) {
@@ -99,9 +102,6 @@ export async function cacheMemory(userMessage, aiMessage) {
     }
 }
 
-
-
-
 /** Store Memory */
 export async function storeMemory(summary, userMessage, aiMessage) {
     if (!summary) {
@@ -109,13 +109,13 @@ export async function storeMemory(summary, userMessage, aiMessage) {
     }
     const id = randomUUID();
     const timestamp = Date.now();
-    const vector = await getEmbedding(summary);
-
+    const vector = await ollamaEmbeddings.embedQuery(summary);
+    const reducedVector = adjustVectorSize(vector);
     if (await isChromaDBAvailable()) {
         await collection.add({
             ids: [id],
             documents: [summary],
-            embeddings: [vector],
+            embeddings: [reducedVector],
             metadatas: [{ userMessage, aiMessage, timestamp }],
         });
     } else {
@@ -161,8 +161,8 @@ export async function forget(id) {
 }
 
 export async function readMemoryFromCache (userMessage, similarityResultCount) {
-    const queryVector = await getEmbedding(userMessage);
-    const reducedQueryVector = configManager.getDimension() != queryVector.length ?normalizeAndTruncate(queryVector, configManager.getDimension()) : queryVector;
+    const queryVector = await ollamaEmbeddings.embedQuery(userMessage);
+    const reducedQueryVector = adjustVectorSize(queryVector);
     // Retrieve from FAISS
     const ntotal = cache.ntotal();
     const faissResults = ntotal > 0 
@@ -199,10 +199,12 @@ export async function readMemoryFromDB (userMessage, similarityResultCount) {
     let conversationSet = new Set();
     let rawResults;
     if (await isChromaDBAvailable()) {
-        const queryVector = await getEmbedding(userMessage);
+        const queryVector = await ollamaEmbeddings.embedQuery(userMessage);
+        const reducedVector = adjustVectorSize(queryVector);
         // Retrieve from ChromaDB
+
         const chromaResult = await collection.query({
-            queryEmbeddings: [queryVector],
+            queryEmbeddings: [reducedVector],
             nResults: similarityResultCount,
             //include: ["documents", "embeddings", "metadatas", "distances"]
         });
@@ -277,6 +279,10 @@ let convertSqliteResultToConversationSet = function (retrievedMemories) {
         conversationSet.add(id, distance, summary, userMessage, aiMessage, timestamp);
     }
     return conversationSet;
+}
+
+function adjustVectorSize(queryVector) {
+    return configManager.getDimension() != queryVector.length ?normalizeAndTruncate(queryVector, configManager.getDimension()) : queryVector;
 }
 
 /** Check if ChromaDB is Available */
