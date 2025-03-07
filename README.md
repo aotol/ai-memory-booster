@@ -140,7 +140,7 @@ npm install
 
 To start AI Memory Booster as a standalone API service:
 ```sh
-ai-memory-booster start
+npx ai-memory-booster start
 ```
 
 To launch AI Memory Booster UI, go to:
