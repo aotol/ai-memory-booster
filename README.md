@@ -98,7 +98,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
 ```js
 {
   "aiModel": "llama3.2", // The primary AI model (must be downloaded first)
-  "learnFromChat": false, // Determines if AI should learn from conversations
+  "learnFromChat": true, // Determines if AI should learn from conversations
   "host": "localhost", // The host address when running AI Memory Booster as an API service
   "port": 4000, // The port for the AI Memory Booster API service
   "baseKeepAlive": 3000, // Duration (ms) the LLM module stays active after each call
@@ -106,7 +106,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
   "similarityResultCount": 3, // Number of similar records retrieved from the database
   "categorySureThreshold": 49, // Threshold for AI to confidently classify a response
   "summaryCharacterLimit": 256, // Maximum character length for conversation summaries
-  "dimension": 256, // Dimensionality of vector embeddings
+  "dimension": 768, // Dimensionality of vector embeddings
   "similarityThreshold": 0.7, // Threshold for similarity-based searches
   "consolidateConversationThreshold": 256, // Threshold for summarizing conversations
   "chromaDBHost": "http://localhost:8000", // ChromaDB service URL (host and port)
