@@ -16,7 +16,7 @@ import configManager from "./configManager.js";
 import {ollamaEmbeddings, normalizeAndTruncate} from "./llm.js";
 import {log} from "./debug.js";
 
-const collectionName = "ai_memory_booster"; // ChromaDB Collection
+const collectionName = configManager.getCollection(); // ChromaDB Collection
 let chromaClient;
 let collection;
 let sqlite;
@@ -43,15 +43,19 @@ async function initializeSqlite() {
 
 /** Initialize ChromaDB */
 async function initializeChromaDB() {
-    chromaClient = new ChromaClient({ path: configManager.getChromaDBHost(), tenant: configManager.getTenant() });
-    collection = await chromaClient.getOrCreateCollection({
-        name: collectionName,
-        embeddingFunction: async (text) => {
-            const embedding = await ollamaEmbeddings.embedQuery(text);
-            return embedding;
-        },
-        dimension: configManager.getDimension(),
-    });
+    try {
+        chromaClient = new ChromaClient({ path: configManager.getChromaDBHost(), tenant: configManager.getTenant() });
+        collection = await chromaClient.getOrCreateCollection({
+            name: collectionName,
+            embeddingFunction: async (text) => {
+                const embedding = await ollamaEmbeddings.embedQuery(text);
+                return embedding;
+            },
+            dimension: configManager.getDimension(),
+        });
+    } catch (err) {
+        console.error("ChromaDB is throwing:\n" + err + "\nAI Memory Booster may not function as expected.\nInstall ChromaDB: pip install chromadb\nLaunch ChromaDB: chroma run --path ./chroma_db");
+    }
 }
 
 /** Initialize FAISS cache */

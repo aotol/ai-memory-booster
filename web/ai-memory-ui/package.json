@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "react-markdown": "^10.0.1",
-    "remark-gfm": "^4.0.1",
-    "react-syntax-highlighter": "^15.6.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "next": "15.2.0"

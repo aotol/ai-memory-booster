@@ -98,8 +98,6 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
 ```js
 {
   "aiModel": "llama3.2", // The primary AI model (must be downloaded first)
-  "smallAiModel": "llama3.2:1b", // A lightweight AI model for subtasks (if enabled)
-  "enableSmallAI": true, // Enables a lightweight AI model for handling smaller tasks
   "learnFromChat": false, // Determines if AI should learn from conversations
   "host": "localhost", // The host address when running AI Memory Booster as an API service
   "port": 4000, // The port for the AI Memory Booster API service
@@ -113,6 +111,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
   "consolidateConversationThreshold": 256, // Threshold for summarizing conversations
   "chromaDBHost": "http://localhost:8000", // ChromaDB service URL (host and port)
   "tenant": "default_tenant", // ChromaDB tenant name
+  "collection": "ai_memory_booster", // ChromaDB collection name used by AI Memory Booster
   "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses.", // Prompt for how AI should respond based on past memory
   "debug": false // If turn on the debug message
 }

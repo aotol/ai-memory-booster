@@ -13,8 +13,6 @@ const CONFIG_FILE = path.join( "./config.json"); // Ensure the file is stored in
 
 const DEFAULT_CONFIG = {
     "aiModel": "llama3.2:latest",
-    //"smallAiModel": "llama3.2:1b",
-    //"enableSmallAI": false,
     "learnFromChat": true,
     "host": "localhost",
     "port": 4000,
@@ -28,6 +26,7 @@ const DEFAULT_CONFIG = {
     "consolidateConversationThreshold": 256,
     "chromaDBHost": "http://localhost:8000",
     "tenant": "default_tenant",
+    "collection": "ai_memory_booster",
     "rolePrompt": "You are a personal assistant. The following is the conversation history to understand the background. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n",
     "debug": false
 };
@@ -64,8 +63,6 @@ const config = loadConfig();
 const configManager = {
     // Getters
     getAiModel: () => config.aiModel,
-    getSmallAiModel: () => config.smallAiModel,
-    isEnableSmallAI: () => config.enableSmallAI,
     isLearnFromChat: () => config.learnFromChat,
     getHost: () => config.host,
     getPort: () => config.port,
@@ -79,13 +76,12 @@ const configManager = {
     getConsolidateConversationThreshold: () => config.consolidateConversationThreshold,
     getChromaDBHost: () => config.chromaDBHost,
     getTenant: () => config.tenant,
+    getCollection: () => config.collection,
     getRolePrompt: () => config.rolePrompt,
     isDebug: () => config.debug,
 
     // Setters
     setAiModel: (value) => { config.aiModel = value; saveConfig(config); },
-    setSmallAiModel: (value) => { config.smallAiModel = value; saveConfig(config); },
-    setEnableSmallAI: (value) => { config.enableSmallAI = value; saveConfig(config); },
     setLearnFromChat: (value) => { config.learnFromChat = value; saveConfig(config); },
     setHost: (value) => { config.host = value; saveConfig(config); },
     setPort: (value) => { config.port = value; saveConfig(config); },
@@ -99,6 +95,7 @@ const configManager = {
     setConsolidateConversationThreshold: (value) => { config.consolidateConversationThreshold = value; saveConfig(config); },
     setChromaDBHost: (value) => { config.chromaDBHost = value; saveConfig(config); },
     setTenant: (value) => { config.tenant = value; saveConfig(config); },
+    setCollection: (value) => { config.collection = value; saveConfig(config); },
     setRolePrompt: (value) => { config.rolePrompt = value; saveConfig(config); },
     setDebug: (value) => { config.debug = value; saveConfig(config); },
 

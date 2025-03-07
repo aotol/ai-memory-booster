@@ -69,4 +69,4 @@ app.get("/spec", async (req, res) => {
 const HOST = AI_Memory.configManager.getHost();
 const PORT = AI_Memory.configManager.getPort();
 
-app.listen(PORT, HOST, () => console.log("AI Memory Booster API running on http://" + HOST + ":" + PORT));
+app.listen(PORT, HOST, () => console.log("AI Memory Booster API is running on http://" + HOST + ":" + PORT));
