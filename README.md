@@ -150,6 +150,10 @@ npm run dev
 ```
 Make sure you have set the environment variable: `AI_MEMORY_BOOSTER_API_URL` to identify where AI Memory Booster API service is running.
 e.g.:
+```sh
+export AI_MEMORY_BOOSTER_API_URL="http://localhost:4000"
+```
+Alternatively, create a ```.env.local``` file under ```ai-memory-ui``` directory and set the content to:
 ```
 AI_MEMORY_BOOSTER_API_URL=http://localhost:4000
 ```
