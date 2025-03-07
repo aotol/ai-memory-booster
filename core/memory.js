@@ -181,10 +181,10 @@ export async function readMemoryFromCache (userMessage, similarityResultCount) {
             const distance = distances[i] ?? Infinity;
             const id = label;
             const result = getMemoryById(id);
-            const summary = result.userMessage || "";
-            const userMessage = result.userMessage || "";
-            const aiMessage = result.aiMessage || "";
-            const timestamp = result.timestamp || 0;
+            const summary = result?.userMessage || "";
+            const userMessage = result?.userMessage || "";
+            const aiMessage = result?.aiMessage || "";
+            const timestamp = result?.timestamp || 0;
             conversationSet.add({summary, id, distance, userMessage, aiMessage, timestamp});
             i ++;
         });
