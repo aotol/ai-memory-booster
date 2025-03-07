@@ -9,9 +9,6 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm"; // Enables GitHub-style tables
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 export default function Home() {
     const [messages, setMessages] = useState([]);
@@ -193,28 +190,7 @@ export default function Home() {
                     <div key={index} className={`p-2 my-1 ${msg.sender === "User" ? "text-blue-700" : "text-green-700"}`}>
                         <div className="inline-flex">
                             <strong>{msg.sender}:&nbsp;</strong>
-                            <ReactMarkdown
-                                remarkPlugins={[remarkGfm]} // Enables GitHub-style tables & formatting
-                                components={{
-                                    code({ node, inline, className, children, ...props }) {
-                                        const match = /language-(\w+)/.exec(className || "");
-                                        return !inline && match ? (
-                                            <SyntaxHighlighter
-                                                style={atomDark} // Dark theme for code blocks
-                                                language={match[1]}
-                                                PreTag="div"
-                                                {...props}
-                                            >
-                                                {String(children).replace(/\n$/, "")}
-                                            </SyntaxHighlighter>
-                                        ) : (
-                                            <code className="bg-gray-200 p-1 rounded">{children}</code>
-                                        );
-                                    }
-                                }}
-                            >
-                            {msg.text}
-                        </ReactMarkdown>
+                            <ReactMarkdown>{msg.text}</ReactMarkdown>
                         </div>
                     </div>
                 ))}
