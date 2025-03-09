@@ -39,6 +39,12 @@ app.post("/chat", async (req, res) => {
     res.json({ aiMessage: response });
 });
 
+app.post("/generate", async (req, res) => {
+    const { userMessage } = req.body;
+    const response = await AI_Memory.generate(userMessage);
+    res.json({ aiMessage: response });
+});
+
 app.get("/forget", async (req, res) => {
     const { id } = req.query;  // Extract id from query string
 

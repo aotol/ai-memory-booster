@@ -197,6 +197,12 @@ function getMemoryById(id) {
     return memoryMetadata.find(memory => memory.id === id);
 }
 
+export async function readMemoryFromCacheAndDB(userMessage, similarityResultCount) {
+    const conversationDBSet = await readMemoryFromDB(userMessage, similarityResultCount);
+    const conversationCacheSet = await readMemoryFromCache(userMessage, similarityResultCount);
+    const conversationSet = mergeConversationSet(conversationDBSet, conversationCacheSet);
+    return conversationSet;
+}
 
 /** Read Memory */
 export async function readMemoryFromDB (userMessage, similarityResultCount) {
@@ -242,6 +248,14 @@ export async function readMemoryFromDB (userMessage, similarityResultCount) {
     // Convert Set to Array, Sort by timestamp (descending)
     let sortedConversations = [...conversationSet].sort((a, b) => b.timestamp - a.timestamp);
     return sortedConversations;
+}
+
+function mergeConversationSet(conversationSetA, conversationSetB) {
+    // Merge both sets
+    let mergedSet = [...conversationSetA, ...conversationSetB];
+    // Sort by timestamp (ascending order)
+    mergedSet.sort((a, b) => a.timestamp - b.timestamp);
+    return mergedSet;
 }
 
 let convertChromaResultToConversationSet = function (retrievedMemories) {

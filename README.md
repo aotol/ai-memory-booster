@@ -80,10 +80,17 @@ console.log(llmSpec);
 ```
 
 ### Chat with AI Memory Booster
-Interacts with the AI while using stored memory.
+Interacts with the AI while using stored memory (For chat).
 ```js
 const response = await AI_Memory.chat("How's the weather today?");
-console.log(response); // "It is raining"
+console.log(response); // "It is raining today!"
+```
+
+### Generate content with AI Memory Booster
+Interacts with the AI while using stored memory (For generating text content).
+```js
+const response = await AI_Memory.generate("How's the weather today?");
+console.log(response); // "It is raining."
 ```
 
 ## 🛠 Configuration

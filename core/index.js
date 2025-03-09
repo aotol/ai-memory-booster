@@ -7,7 +7,7 @@
  * Author: Zhan Zhang <zhan@aotol.com>
  */
 import { storeMemory, retrieveMemory, forget, forgetAll } from "./memory.js";
-import { getLlmSpec, chat } from "./llm.js";
+import { getLlmSpec, chat, generate } from "./llm.js";
 import configManager from "./configManager.js";
 
 /** Export core AI Memory Booster functions */
@@ -15,6 +15,7 @@ export default {
     storeMemory,
     retrieveMemory,
     chat,
+    generate,
     forget,
     forgetAll,
     getLlmSpec,

@@ -13,6 +13,7 @@ import ReactMarkdown from "react-markdown";
 export default function Home() {
     const [messages, setMessages] = useState([]);
     const [chatInput, setChatInput] = useState("");
+    const [mode, setMode] = useState("chat"); 
     const [userMessage, setUserMessage] = useState("");
     const [aiMessage, setAiMessage] = useState("");
     const [memoryQuery, setMemoryQuery] = useState("");
@@ -32,6 +33,10 @@ export default function Home() {
         scrollToBottom();
     }, [messages]); 
 
+    const handleModeChange = (event) => {
+        setMode(event.target.value);
+    };
+
     // Load configuration when the page opens
     useEffect(() => {
         fetchConfig();
@@ -43,9 +48,11 @@ export default function Home() {
 
         setMessages([...messages, { sender: "User", text: chatInput.trim() }]);
         setChatInput("");
+        const endpoint = mode === "chat" ? "/api/chat" : "/api/generate"; // Choose API based on selected mode
+
 
         try {
-            const response = await fetch("/api/chat", {
+            const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ userMessage: chatInput.trim() }),
@@ -184,6 +191,34 @@ export default function Home() {
     return (
         <div className="flex flex-col items-center min-h-screen p-4 bg-gray-100">
             <h1 className="text-2xl font-bold mb-4">AI Memory Booster Chat</h1>
+            {/* Chat / Generate Toggle */}
+            <div className="flex items-center mb-4 space-x-4">
+                <label className="font-semibold">Mode:</label>
+
+                <label className="flex items-center space-x-2">
+                    <input
+                        type="radio"
+                        name="mode"
+                        value="chat"
+                        checked={mode === "chat"}
+                        onChange={handleModeChange}
+                        className="h-4 w-4"
+                    />
+                    <span>Chat</span>
+                </label>
+
+                <label className="flex items-center space-x-2">
+                    <input
+                        type="radio"
+                        name="mode"
+                        value="generate"
+                        checked={mode === "generate"}
+                        onChange={handleModeChange}
+                        className="h-4 w-4"
+                    />
+                    <span>Generate</span>
+                </label>
+            </div>
             {/* Chat Window */}
             <div className="w-full max-w-2xl bg-white shadow-lg rounded-lg p-4 h-96 overflow-y-auto mb-4">
                 {messages.map((msg, index) => (

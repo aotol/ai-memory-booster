@@ -78,6 +78,8 @@ const configManager = {
     getTenant: () => config.tenant,
     getCollection: () => config.collection,
     getRolePrompt: () => config.rolePrompt,
+    getTemperature: () => config.temperature,
+    getTopP : () => config.topP,
     isDebug: () => config.debug,
 
     // Setters
@@ -96,7 +98,8 @@ const configManager = {
     setChromaDBHost: (value) => { config.chromaDBHost = value; saveConfig(config); },
     setTenant: (value) => { config.tenant = value; saveConfig(config); },
     setCollection: (value) => { config.collection = value; saveConfig(config); },
-    setRolePrompt: (value) => { config.rolePrompt = value; saveConfig(config); },
+    setTemperature: (value) => { config.temperature = value; saveConfig(config); },
+    setTopP: (value) => { config.topP = value; saveConfig(config); },
     setDebug: (value) => { config.debug = value; saveConfig(config); },
 
     // Get all config
