@@ -28,7 +28,8 @@ const DEFAULT_CONFIG = {
     "tenant": "default_tenant",
     "collection": "ai_memory_booster",
     "rolePrompt": "You are a personal assistant. The following is the conversation history to understand the background. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n",
-    "debug": false
+    "debug": false,
+    "archive": false
 };
 
 if (!fs.existsSync(CONFIG_FILE)) {
@@ -81,6 +82,7 @@ const configManager = {
     getTemperature: () => config.temperature,
     getTopP : () => config.topP,
     isDebug: () => config.debug,
+    isArchive: () => config.archive,
 
     // Setters
     setAiModel: (value) => { config.aiModel = value; saveConfig(config); },
@@ -101,6 +103,7 @@ const configManager = {
     setTemperature: (value) => { config.temperature = value; saveConfig(config); },
     setTopP: (value) => { config.topP = value; saveConfig(config); },
     setDebug: (value) => { config.debug = value; saveConfig(config); },
+    setArchive: (value) => {config.archive = value; setArchive(config)},
 
     // Get all config
     getAllConfig: () => config,

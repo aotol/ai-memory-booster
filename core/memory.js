@@ -13,8 +13,9 @@ import faiss from "faiss-node";
 import { ChromaClient } from "chromadb";
 import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
-import {ollamaEmbeddings, normalizeAndTruncate} from "./llm.js";
+import {ollamaEmbeddings} from "./llm.js";
 import {log} from "./debug.js";
+import { sortCoversationSet, adjustVectorSize } from "./util.js";
 
 const collectionName = configManager.getCollection(); // ChromaDB Collection
 let chromaClient;
@@ -71,7 +72,7 @@ async function initialize() {
     initializeCache();
 }
 
-export async function cacheMemory(userMessage, aiMessage) {
+export async function cacheMemory(userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0) {
     try {
         // Convert userMessage to an embedding vector
         const embedding = await ollamaEmbeddings.embedQuery(userMessage);
@@ -98,7 +99,7 @@ export async function cacheMemory(userMessage, aiMessage) {
         const timestamp = Date.now();
 
         // Store metadata separately
-        memoryMetadata.push({ id, userMessage, aiMessage, timestamp });
+        memoryMetadata.push({ id, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp });
         log("Memory cached successfully.");
 
     } catch (error) {
@@ -107,7 +108,7 @@ export async function cacheMemory(userMessage, aiMessage) {
 }
 
 /** Store Memory */
-export async function storeMemory(summary, userMessage, aiMessage) {
+export async function storeMemory(summary, userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0) {
     if (!summary) {
         summary = await summarizeConversation("", userMessage, aiMessage);
     }
@@ -120,11 +121,11 @@ export async function storeMemory(summary, userMessage, aiMessage) {
             ids: [id],
             documents: [summary],
             embeddings: [reducedVector],
-            metadatas: [{ userMessage, aiMessage, timestamp }],
+            metadatas: [{ userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp }],
         });
     } else {
-        await sqlite.run("INSERT INTO memories (id, summary, userMessage, aiMessage, embedding, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-            [id, summary, userMessage, aiMessage, Buffer.from(new Float32Array(vector).buffer), timestamp]);
+        await sqlite.run("INSERT INTO memories (id, summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight, embedding, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+            [id, summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight, Buffer.from(new Float32Array(vector).buffer), timestamp]);
         cache.add(vector);
     }
     return id;
@@ -208,16 +209,20 @@ export async function readMemoryFromCacheAndDB(userMessage, similarityResultCoun
 export async function readMemoryFromDB (userMessage, similarityResultCount) {
     let conversationSet = new Set();
     let rawResults;
+    let chromaResult;
     if (await isChromaDBAvailable()) {
-        const queryVector = await ollamaEmbeddings.embedQuery(userMessage);
-        const reducedVector = adjustVectorSize(queryVector);
-        // Retrieve from ChromaDB
-
-        const chromaResult = await collection.query({
-            queryEmbeddings: [reducedVector],
-            nResults: similarityResultCount,
-            //include: ["documents", "embeddings", "metadatas", "distances"]
-        });
+        if (!userMessage) {
+            chromaResult = await collection.get();  //Get all the records
+        } else {
+            const queryVector = await ollamaEmbeddings.embedQuery(userMessage);
+            const reducedVector = adjustVectorSize(queryVector);
+            // Retrieve from ChromaDB
+            chromaResult = await collection.query({
+                queryEmbeddings: [reducedVector],
+                nResults: similarityResultCount,
+                //include: ["documents", "embeddings", "metadatas", "distances"]
+            });
+        }
         rawResults = convertChromaResultToConversationSet(chromaResult);
     } else {
         const faissResult = await readMemoryFromCache(userMessage, similarityResultCount);
@@ -231,7 +236,9 @@ export async function readMemoryFromDB (userMessage, similarityResultCount) {
                         id: row.id,
                         summary: row.userMessage,
                         userMessage: row.userMessage,
+                        userMessageWeight: row.userMessageWeight,
                         aiMessage: row.aiMessage,
+                        aiMessageWeight: row.aiMessageWeight,
                         distance: distances[i] // FAISS also returns distance
                     });
                 }
@@ -246,7 +253,7 @@ export async function readMemoryFromDB (userMessage, similarityResultCount) {
         }
     });
     // Convert Set to Array, Sort by timestamp (descending)
-    let sortedConversations = [...conversationSet].sort((a, b) => b.timestamp - a.timestamp);
+    let sortedConversations = sortCoversationSet(conversationSet);
     return sortedConversations;
 }
 
@@ -254,8 +261,8 @@ function mergeConversationSet(conversationSetA, conversationSetB) {
     // Merge both sets
     let mergedSet = [...conversationSetA, ...conversationSetB];
     // Sort by timestamp (ascending order)
-    mergedSet.sort((a, b) => a.timestamp - b.timestamp);
-    return mergedSet;
+    let sortedConversations = sortCoversationSet(mergedSet);
+    return sortedConversations;
 }
 
 let convertChromaResultToConversationSet = function (retrievedMemories) {
@@ -265,21 +272,43 @@ let convertChromaResultToConversationSet = function (retrievedMemories) {
     const conversationSet = new Set();
     for (let memoryLoop = 0; retrievedMemories && memoryLoop < retrievedMemories.length; memoryLoop++) {
         const memory = retrievedMemories[memoryLoop];
-        for (let i = 0; memory.ids && i < memory.ids.length; i++) {  // Iterate through all matches
-            const ids = memory.ids[i];
-            for (let j = 0; j < ids.length; j++) {
-                const id = ids[j];
-                const distance = memory.distances[i][j] ?? Infinity;  //The distance between the result and the text. Smaller, the better
-                const summary = memory.documents[i][j] || "";
-                const userMessage = memory.metadatas[i][j].userMessage || "";
-                const aiMessage = memory.metadatas[i][j].aiMessage || "";
-                const timestamp = memory.metadatas[i][j].timestamp || 0;
-                conversationSet.add({summary, id, distance, userMessage, aiMessage, timestamp});
+        // Check if the data structure is from `query` (nested arrays) or `get` (flat arrays)
+        const isQueryFormat = Array.isArray(memory.ids[0]);  
+        if (isQueryFormat) {
+            // Handle `query` response (nested arrays)
+            for (let i = 0; memory.ids && i < memory.ids.length; i++) {
+                const ids = memory.ids[i];
+                for (let j = 0; j < ids.length; j++) {
+                    const id = ids[j];
+                    const distance = memory.distances[i][j] ?? Infinity;
+                    const summary = memory.documents[i][j] || "";
+                    const userMessage = memory.metadatas[i][j]?.userMessage || "";
+                    const userMessageWeight = memory.metadatas[i][j]?.userMessageWeight || 0;
+                    const aiMessage = memory.metadatas[i][j]?.aiMessage || "";
+                    const aiMessageWeight = memory.metadatas[i][j]?.aiMessageWeight || 0;
+                    const timestamp = memory.metadatas[i][j]?.timestamp || 0;
+                    conversationSet.add({ summary, id, distance, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp });
+                }
+            }
+        } else {
+            // Handle `get` response (flat arrays)
+            for (let i = 0; memory.ids && i < memory.ids.length; i++) {
+                const id = memory.ids[i];
+                const distance = 0;  // `get` does not return distances
+                const summary = memory.documents[i] || "";
+                const userMessage = memory.metadatas[i]?.userMessage || "";
+                const userMessageWeight = memory.metadatas[i]?.userMessageWeight || 0;
+                const aiMessage = memory.metadatas[i]?.aiMessage || "";
+                const aiMessageWeight = memory.metadatas[i]?.aiMessageWeight || 0;
+                const timestamp = memory.metadatas[i]?.timestamp || 0;
+                conversationSet.add({ summary, id, distance, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp });
             }
         }
     }
+    
     return conversationSet;
-}
+};
+
 
 let convertSqliteResultToConversationSet = function (retrievedMemories) {
     if (retrievedMemories && !Array.isArray(retrievedMemories)) {
@@ -292,15 +321,13 @@ let convertSqliteResultToConversationSet = function (retrievedMemories) {
         const distance = memory.distance ?? Infinity;
         const summary = memory.summary || "";
         const userMessage = memory.userMessage || "";
+        const userMessageWeight = memory.userMessageWeight || 0;
         const aiMessage = memory.aiMessage || "";
+        const aiMessageWeight = memory.aiMessageWeight || 0;
         const timestamp = memory.timestamp || 0;
-        conversationSet.add(id, distance, summary, userMessage, aiMessage, timestamp);
+        conversationSet.add(id, distance, summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp);
     }
     return conversationSet;
-}
-
-function adjustVectorSize(queryVector) {
-    return configManager.getDimension() != queryVector.length ?normalizeAndTruncate(queryVector, configManager.getDimension()) : queryVector;
 }
 
 /** Check if ChromaDB is Available */

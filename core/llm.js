@@ -10,6 +10,8 @@ import { Ollama } from "ollama";
 import configManager from "./configManager.js";
 import * as Memory from "./memory.js"
 import { log } from "./debug.js";
+import { archiveToFile } from "./archive.js";
+import { mergeMemories, calculateConversationWeight, detectContradiction } from "./util.js";
 let lastInteractionTime = Date.now();
 const llm = new Ollama();
 const askQuestionMarker = "#question";
@@ -45,8 +47,11 @@ export async function chat(userMessage) {
     log(`Execution time for chat: ${executionTime} millionseconds`);
     aiMessage = await learnFromChat(conversationSet, userMessage, aiMessage);
     const shortenUserMessage = (userMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(userMessage) : userMessage.trim();
-    const shortenAirMessage = (aiMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(aiMessage) : aiMessage.trim();
-    await Memory.cacheMemory(shortenUserMessage, shortenAirMessage);
+    const shortenAiMessage = (aiMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(aiMessage) : aiMessage.trim();
+    const conversationWeight = await calculateConversationWeight(shortenUserMessage, shortenAiMessage, conversationSet);
+    const userMessageWeight = conversationWeight.userMessageWeight;
+    const aiMessageWeight = conversationWeight.aiMessageWeight;
+    await Memory.cacheMemory(shortenUserMessage, userMessageWeight, shortenAiMessage, aiMessageWeight);
     return aiMessage;
 }
 
@@ -74,60 +79,60 @@ async function learnFromChat(conversationSet, userMessage, aiMessage) {
         if (updateMemoryRequired) {    //Need to update the database
             aiMessage += `\n${await generateAcknowledgment(userMessage)}`;
             let newConversationSet = new Set();
+            let summary = "";
             let mergedSummary = "";
             let mergedUserMessage = "";
             let mergedAiMessage = "";
             const deleteConversationSet = await Memory.readMemoryFromDB(userMessage, configManager.getSimilarityResultCount()); //Find the most similar conversation from DB
-            let mergedMemories = await mergeMemories(deleteConversationSet);
             if (deleteConversationSet.length > 0) {
+                let mergedMemories = await mergeMemories(deleteConversationSet);
+                mergedSummary = mergedMemories.summary;
+                mergedUserMessage = mergedMemories.userMessage;
+                mergedAiMessage = mergedMemories.aiMessage;
+                // Archive old conversations and delete
                 for (const conversation of deleteConversationSet) {
-                    const id = conversation.id;
-                    if (id) {
-                        mergedSummary = mergedMemories.summary;
-                        mergedUserMessage = mergedMemories.userMessage;
-                        mergedAiMessage = mergedMemories.aiMessage;
-                        Memory.forget(id); //Delete the old conversation
+                    const isArchive = configManager.isArchive();
+                    if (isArchive) {
+                        archiveToFile(conversation);    //Archive the conversation to file
                     }
+                    await Memory.forget(conversation.id); // delete the conversation from the database
                 }
-                mergedUserMessage = mergedUserMessage + "." + userMessage;
-                mergedAiMessage = mergedAiMessage + "." + aiMessage;
+
+                newConversationSet.add({ summary: mergedSummary, userMessage: mergedUserMessage, aiMessage: mergedAiMessage });
+                newConversationSet.add({ summary, userMessage, aiMessage });
+                newConversationSet = await consolidateConversation(newConversationSet);
+                let ids = [];
+                for (const conversation of newConversationSet) {
+                    const summary = conversation.summary || conversation.userMessage;
+                    const { userMessageWeight, aiMessageWeight } = await calculateConversationWeight(
+                        conversation.userMessage, 
+                        conversation.aiMessage, 
+                        conversationSet
+                    );
+                    let id = await Memory.storeMemory(summary, conversation.userMessage, userMessageWeight, conversation.aiMessage, aiMessageWeight);
+                    ids.push(id);
+                }
             } else {
                 //Nothing to delete
                 mergedUserMessage = userMessage;
                 mergedAiMessage = aiMessage;
-            }
-            newConversationSet.add({summary: mergedSummary, userMessage: mergedUserMessage, aiMessage: mergedAiMessage});
-            newConversationSet = await consolidateConversation(newConversationSet);
-            let ids = [];
-            for (const conversation of newConversationSet) {
-                const summary =  conversation.summary;
-                const userMessage = conversation.userMessage;
-                const aiMessage = conversation.aiMessage;
-                let id = await Memory.storeMemory(summary, userMessage, aiMessage);    
-                ids.push(id);
+                newConversationSet.add({summary: mergedSummary, userMessage: mergedUserMessage, aiMessage: mergedAiMessage});
+                newConversationSet = await consolidateConversation(newConversationSet);
+                let ids = [];
+                for (const conversation of newConversationSet) {
+                    const summary =  conversation.summary;
+                    const userMessage = conversation.userMessage;
+                    const aiMessage = conversation.aiMessage;
+                    const conversationWeight = await calculateConversationWeight(userMessage, aiMessage, conversationSet);
+                    const userMessageWeight = conversationWeight.userMessageWeight;
+                    const aiMessageWeight = conversationWeight.aiMessageWeight;
+                    let id = await Memory.storeMemory(summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight);    
+                    ids.push(id);
+                }
             }
         }
     }
     return aiMessage;
-}
-
-/** Merge memories into one memories */
-export async function mergeMemories(conversationSet) {
-    if (!conversationSet || conversationSet.length === 0) {
-        return ""; // No conversations to merge
-    }
-    // Sort conversations from oldest to latest
-    let sortedConversations = [...conversationSet].sort((a, b) => a.timestamp - b.timestamp);
-
-    // Separate user messages and AI responses
-    let mergedUserMessage = sortedConversations.map(conv => conv.userMessage).join(".");
-    let mergedAiMessage = sortedConversations.map(conv => conv.aiMessage).join(".");
-    let mergedSummary = sortedConversations.map(conv => conv.summary).join(".");
-    return {
-        summary: mergedSummary.trim(),
-        userMessage: mergedUserMessage.trim(),
-        aiMessage: mergedAiMessage.trim()
-    };
 }
 
 let generateAcknowledgment = async function (userMessage) {
@@ -304,7 +309,7 @@ async function shortenMessage(message) {
 export async function consolidateConversation(conversationSet) {
     const newConversationSet = new Set();
     for (const conversation of conversationSet) {
-        let summary = conversation.summary.replace(/[\n\r]/g, ' ').trim();
+        let summary = conversation.summary?.replace(/[\n\r]/g, ' ').trim();
         let userMessage = conversation.userMessage.replace(/[\n\r]/g, ' ').trim();
         let aiMessage = conversation.aiMessage.replace(/[\n\r]/g, ' ').trim();
         summary = await summarizeConversation(summary, userMessage, aiMessage);
@@ -378,7 +383,8 @@ async function callGenerateAI(prompt, system = "", context = []) {
         keep_alive: getDynamicKeepAlive(), // Use adaptive keep-alive
         options: {
             temperature: configManager.getTemperature() || 0.5, 
-            top_p: configManager.getTopP() || 0.9
+            top_p: configManager.getTopP() || 0.9,
+
         } // Balanced accuracy & engagement
     });
     const response = llmResponse.response;
@@ -405,7 +411,7 @@ async function callChatAI(system, userMessage, conversationSet = []) {
         keep_alive: getDynamicKeepAlive(),
         options: {
             temperature: configManager.getTemperature() || 0.5, 
-            top_p: configManager.getTopP() || 0.9
+            top_p: configManager.getTopP() || 0.9,
         } // Balanced accuracy & engagement
     });
     return llmResponse.message.content; // Extract AI response
@@ -439,47 +445,6 @@ let summarizeConversation = async function(oldSummary, userMessage, aiMessage) {
 function extractNumber(str) {
     const match = str.match(/\d+/); // Find the first sequence of digits
     return match ? parseInt(match[0], 10) : NaN;
-}
-
-/**
- * Preserves relative vector values. Loses dimensions
- * @param {*} embedding 
- * @param {*} targetDimension 
- * @returns 
- */
-export function normalizeAndTruncate(embedding, targetDimension) {
-    const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-
-    if (norm === 0) return embedding.slice(0, targetDimension); // Prevent division by zero
-
-    const normalizedEmbedding = embedding.map(val => val / norm);
-    return normalizedEmbedding.slice(0, targetDimension);
-}
-
-/**
- * Captures info from start & end. Arbitrary splitting.
- * @param {*} embedding 
- * @param {*} targetDimension 
- * @returns 
- */
-export function weightedTruncate(embedding, targetDimension = 256) {
-    const halfDim = Math.floor(targetDimension / 2);
-    return embedding.slice(0, halfDim).concat(embedding.slice(-halfDim));
-}
-
-/**
- * Keeps overall vector structure. Slight loss of granularity
- * @param {*} embedding 
- * @param {*} targetDimension 
- * @returns 
- */
-export function averagePoolingTruncate(embedding, targetDimension = 256) {
-    const factor = Math.floor(embedding.length / targetDimension);
-    
-    return Array.from({ length: targetDimension }, (_, i) =>
-        embedding.slice(i * factor, (i + 1) * factor)
-                 .reduce((sum, val) => sum + val, 0) / factor
-    );
 }
 
 async function initialize() {

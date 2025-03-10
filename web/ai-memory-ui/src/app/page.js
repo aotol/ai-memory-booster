@@ -97,7 +97,6 @@ export default function Home() {
 
     // Retrieve Memory
     const retrieveMemory = async () => {
-        if (!memoryQuery.trim()) return;
         try {
             const response = await fetch("/api/retrieve-memory", {
                 method: "POST",
@@ -290,9 +289,9 @@ export default function Home() {
                                 </div>
                                 <strong>Summary:</strong> {memory.summary}
                                 <br />
-                                <span className="text-blue-700"><strong>User:&nbsp;</strong> {memory.userMessage}</span>
+                                <span className="text-blue-700"><strong>User:&nbsp;</strong> {memory.userMessage}</span><span className="text-xs text-gray-500">(Weight: {memory.userMessageWeight})</span>
                                 <br />
-                                <span className="text-green-700"><strong>AI:&nbsp;</strong> {memory.aiMessage}</span>
+                                <span className="text-green-700"><strong>AI:&nbsp;</strong> {memory.aiMessage}</span><span className="text-xs text-gray-500">(Weight: {memory.aiMessageWeight})</span>
                             </div>
                         ))
                     ) : (
