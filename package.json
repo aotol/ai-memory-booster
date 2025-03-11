@@ -1,6 +1,6 @@
 {
   "name": "ai-memory-booster",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "AI Memory Booster - A memory-enhanced AI chat module with storage capabilities.",
   "main": "core/index.js",
   "bin": {

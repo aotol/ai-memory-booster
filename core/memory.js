@@ -15,7 +15,7 @@ import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
 import {ollamaEmbeddings} from "./llm.js";
 import {log} from "./debug.js";
-import { sortCoversationSet, adjustVectorSize } from "./util.js";
+import { adjustVectorSize, sortConversationSet } from "./util.js";
 
 const collectionName = configManager.getCollection(); // ChromaDB Collection
 let chromaClient;
@@ -180,13 +180,24 @@ export async function readMemoryFromCache (userMessage, similarityResultCount) {
     if (labels) {
         labels.forEach(label => {
             const distance = distances[i] ?? Infinity;
-            const id = label;
+            const id = label;   //id in cache
             const result = getMemoryById(id);
             const summary = result?.userMessage || "";
             const userMessage = result?.userMessage || "";
+            const userMessageWeight = result?.userMessageWeight || 0;
             const aiMessage = result?.aiMessage || "";
+            const aiMessageWeight = result?.aiMessageWeight || 0;
             const timestamp = result?.timestamp || 0;
-            conversationSet.add({summary, id, distance, userMessage, aiMessage, timestamp});
+            conversationSet.add({
+                summary, 
+                //id: "", //Since this record is not from DB, so there is no database id
+                distance, 
+                userMessage, 
+                userMessageWeight, 
+                aiMessage, 
+                aiMessageWeight, 
+                timestamp
+            });
             i ++;
         });
     }
@@ -201,8 +212,8 @@ function getMemoryById(id) {
 export async function readMemoryFromCacheAndDB(userMessage, similarityResultCount) {
     const conversationDBSet = await readMemoryFromDB(userMessage, similarityResultCount);
     const conversationCacheSet = await readMemoryFromCache(userMessage, similarityResultCount);
-    const conversationSet = mergeConversationSet(conversationDBSet, conversationCacheSet);
-    return conversationSet;
+    const conversationArray = mergeConversationSet(conversationDBSet, conversationCacheSet);
+    return conversationArray;
 }
 
 /** Read Memory */
@@ -253,15 +264,15 @@ export async function readMemoryFromDB (userMessage, similarityResultCount) {
         }
     });
     // Convert Set to Array, Sort by timestamp (descending)
-    let sortedConversations = sortCoversationSet(conversationSet);
+    let sortedConversations = sortConversationSet(conversationSet);
     return sortedConversations;
 }
 
-function mergeConversationSet(conversationSetA, conversationSetB) {
+function mergeConversationSet(conversationSetFromDB, conversationSetFromCache) {
     // Merge both sets
-    let mergedSet = [...conversationSetA, ...conversationSetB];
+    let mergedSet = [...conversationSetFromDB, ...conversationSetFromCache];
     // Sort by timestamp (ascending order)
-    let sortedConversations = sortCoversationSet(mergedSet);
+    let sortedConversations = sortConversationSet(mergedSet);    //It is now in array (Not Set)
     return sortedConversations;
 }
 

@@ -105,7 +105,7 @@ export default function Home() {
             });
 
             const data = await response.json();
-            setRetrievedMemories(data);
+            setRetrievedMemories(data.reverse());
         } catch (error) {
             console.error("Error retrieving memory:", error);
         }

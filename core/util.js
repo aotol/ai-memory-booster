@@ -1,66 +1,137 @@
 import configManager from "./configManager.js";
 import {ollamaEmbeddings} from "./llm.js";
-export function sortCoversationSet(conversationSet) {
-    let sortedConversations = [...conversationSet].sort((a, b) => {
-        // First, sort by weight (ascending: less weight at the top)
-        if (a.weight !== b.weight) {
-            return a.weight - b.weight; 
-        }
-        // If weight is the same, sort by timestamp (ascending: older on top)
-        return a.timestamp - b.timestamp;
-    });
-    return sortedConversations;
+
+export let messageSeperator = " | ";
+/**
+ * Sort conversations via weight and timestamp (ascending), return as array
+ */
+export function sortConversationSet(conversationSet) {
+    return [...conversationSet].sort((a, b) => 
+        a.userMessageWeight - b.userMessageWeight || a.timestamp - b.timestamp
+    );
 }
 
-/** Merge memories into one memories */
-export async function mergeMemories(conversationSet) {
-    let mergedMemory = {};
-    if (conversationSet && conversationSet.length > 0) {
-        // Sort conversations from oldest to latest and weight
-        let sortedConversations = sortCoversationSet(conversationSet);
+/**
+ * Merge similar conversations
+ * - conversationArray is already sorted before calling this method.
+ */
+export async function mergeConversations(conversationArray) {
+    if (!conversationArray || conversationArray.length === 0) {
+        return { deleteList: [], mergedList: [] };
+    }
 
-        // Deduplicate messages before merging
-        let uniqueUserMessages = [...new Set(sortedConversations.map(conv => conv.userMessage))];
-        let uniqueAiMessages = [...new Set(sortedConversations.map(conv => conv.aiMessage))];
-        let uniqueSummaries = [...new Set(sortedConversations.map(conv => conv.summary))];
+    let contradictedConversations = [];
+    let nonContradictedConversations = [];
 
-        let contradictionMessages = new Set();
-        for (let i = 0; i < uniqueUserMessages.length; i++) {
-            for (let j = i + 1; j < uniqueUserMessages.length; j++) {
-                if (await detectContradiction(uniqueUserMessages[i], uniqueUserMessages[j])) {
-                    contradictionMessages.add(uniqueUserMessages[i]);
-                    contradictionMessages.add(uniqueUserMessages[j]);
-                }
+    // Step 1: Separate contradicted and non-contradicted conversations
+    for (let i = 0; i < conversationArray.length; i++) {
+        let contradict = false;
+        const conversationCurrentlyChecking = conversationArray[i];
+        for (let j = 0; j < conversationArray.length; j++) {
+            if (i === j) {
+                continue;
+            }
+            const conversationCurrentlyCheckingAgainst = conversationArray[j];
+            const isContradiction = await detectContradiction(
+                conversationCurrentlyChecking.userMessage, 
+                conversationCurrentlyCheckingAgainst.userMessage
+            );
+
+            if (isContradiction) {
+                contradictedConversations.push(conversationCurrentlyChecking);
+                contradict = true;
+                break;
             }
         }
-        let latestConversation = sortedConversations[sortedConversations.length - 1];
-        if (contradictionMessages.size > 0) {
-            mergedMemory =  {
-                summary: latestConversation.summary,
-                userMessage: uniqueUserMessages.join(" / OR / "),
-                aiMessage: uniqueAiMessages.join(" / OR / ")
-            };
-        } else {
-            // Use summarization instead of simple concatenation
-            let mergedUserMessage = summarizeMessages(uniqueUserMessages);
-            let mergedAiMessage = summarizeMessages(uniqueAiMessages);
-            let mergedSummary = summarizeMessages(uniqueSummaries);
 
-            mergedMemory =  {
-                summary: mergedSummary.trim(),
-                userMessage: mergedUserMessage.trim(),
-                aiMessage: mergedAiMessage.trim()
-            };
+        if (!contradict) {
+            nonContradictedConversations.push(conversationCurrentlyChecking);
         }
     }
-    return mergedMemory;
+
+    // Step 2: Merge both sets of conversations
+    const mergedContradictions = await mergeConversationsByType(contradictedConversations);
+    const mergedNonContradictions = await mergeConversationsByType(nonContradictedConversations);
+
+    return {
+        deleteList: [...mergedContradictions.deleteList, ...mergedNonContradictions.deleteList],
+        mergedList: [...mergedContradictions.mergedList, ...mergedNonContradictions.mergedList]
+    };
 }
 
-export function summarizeMessages(messages = []) {
-    let summarizedMessage = "";
-    summarizedMessage = messages.join(". ").trim();
-    return summarizedMessage;
+/**
+ * Merge conversations (either contradicted or non-contradicted)
+ */
+async function mergeConversationsByType(conversationList) {
+    if (conversationList.length === 0) {
+        return { deleteList: [], mergedList: [] };
+    }
+
+    let mergedResults = [];
+    let conversationsToDelete = [];
+    let embeddingsCache = new Map();
+
+    for (let conversation of conversationList) {
+        embeddingsCache.set(conversation.userMessage, await ollamaEmbeddings.embedQuery(conversation.userMessage));
+    }
+
+    // Step 1: Group conversations into clusters based on semantic similarity
+    let clusters = [];
+    for (let i = 0; i < conversationList.length; i++) {
+        let foundCluster = false;
+        let currentEmbedding = embeddingsCache.get(conversationList[i].userMessage); // Get from cache
+        for (let cluster of clusters) {
+            let clusterEmbedding = embeddingsCache.get(cluster[0].userMessage);
+            let similarity = cosineSimilarity(currentEmbedding, clusterEmbedding);
+            if (similarity > 0.7) { //Similar enough
+                cluster.push(conversationList[i]);
+                foundCluster = true;
+                break;
+            }
+        }
+
+        if (!foundCluster) {
+            clusters.push([conversationList[i]]);
+        }
+    }
+
+    // Step 2: Merge conversations within each cluster
+    for (let cluster of clusters) {
+        if (cluster.length === 1) {
+            // No need to merge a single item
+            continue;
+        }
+
+        // Sort cluster by weight & timestamp (ascending)
+        cluster = sortConversationSet(cluster);
+        let baseConversation = cluster[cluster.length - 1]; // The most relevant conversation
+
+        //Merge the message
+        let mergedMessage = {
+            summary: uniqueLastOccurrence(cluster.map(c => c.summary)).join(messageSeperator), //Merge summary (seperate by messageSeperator)
+            userMessage: uniqueLastOccurrence(cluster.map(c => c.userMessage)).join(messageSeperator), //Merge user message (seperate by messageSeperator)
+            aiMessage: uniqueLastOccurrence(cluster.map(c => c.aiMessage)).join(messageSeperator),  // Merge AI responses (seperate by messageSeperator)
+            userMessageWeight: baseConversation.userMessageWeight,  // Use highest weight for merged message
+            aiMessageWeight: baseConversation.aiMessageWeight, // AI weight currently is not used
+            timestamp: Math.max(...cluster.map(c => c.timestamp))  // Keep latest timestamp as the merged message
+        };
+
+        mergedResults.push(mergedMessage);
+        conversationsToDelete.push(...cluster); //All the record in this cluser can now be deleted (because they have been merged)
+    }
+
+    return { deleteList: conversationsToDelete, mergedList: mergedResults };
 }
+
+/** Function to remove duplicates while keeping the last occurrence */
+const uniqueLastOccurrence = (array) => {
+    let seen = new Map(); // Using Map to track last appearance
+    array.forEach(item => {
+        let trimmedItem = item.trim();
+        seen.set(trimmedItem, trimmedItem); // Always update to keep the last occurrence
+    });
+    return [...seen.values()]; // Convert Map values back to an array
+};
 
 export function adjustVectorSize(queryVector) {
     return configManager.getDimension() != queryVector.length ?normalizeAndTruncate(queryVector, configManager.getDimension()) : queryVector;

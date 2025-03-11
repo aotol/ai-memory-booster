@@ -11,7 +11,7 @@ import configManager from "./configManager.js";
 import * as Memory from "./memory.js"
 import { log } from "./debug.js";
 import { archiveToFile } from "./archive.js";
-import { mergeMemories, calculateConversationWeight, detectContradiction } from "./util.js";
+import { mergeConversations, calculateConversationWeight, messageSeperator } from "./util.js";
 let lastInteractionTime = Date.now();
 const llm = new Ollama();
 const askQuestionMarker = "#question";
@@ -37,102 +37,135 @@ async function isUpdateMemoryRequired(conversationSet, userMessage) {
     }
 }
 
-/** AI Chat */
-export async function chat(userMessage) {
+/** Common AI Processing Function */
+async function processAIInteraction(userMessage, mode) {
     const conversationSet = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
     let system = configManager.getRolePrompt();
+    let aiMessage;
+    
     let executionStartTime = Date.now();
-    let aiMessage = await callChatAI(system, userMessage, conversationSet);
+    
+    if (mode === "chat") {
+        aiMessage = await callChatAI(system, userMessage, conversationSet);
+    } else if (mode === "generate") {
+        let prompt = generatePrompt(conversationSet, userMessage);
+        log(prompt);
+        aiMessage = await callGenerateAI(prompt, system);
+    } else {
+        throw new Error("Invalid mode: must be 'chat' or 'generate'");
+    }
+
     let executionTime = Date.now() - executionStartTime;
-    log(`Execution time for chat: ${executionTime} millionseconds`);
-    aiMessage = await learnFromChat(conversationSet, userMessage, aiMessage);
-    const shortenUserMessage = (userMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(userMessage) : userMessage.trim();
-    const shortenAiMessage = (aiMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(aiMessage) : aiMessage.trim();
-    const conversationWeight = await calculateConversationWeight(shortenUserMessage, shortenAiMessage, conversationSet);
-    const userMessageWeight = conversationWeight.userMessageWeight;
-    const aiMessageWeight = conversationWeight.aiMessageWeight;
-    await Memory.cacheMemory(shortenUserMessage, userMessageWeight, shortenAiMessage, aiMessageWeight);
+    log(`Execution time for ${mode}: ${executionTime} milliseconds`);
+    
+    let learnFromChatResult = await learnFromChat(conversationSet, userMessage, aiMessage);
+    aiMessage = learnFromChatResult.aiMessage;
+    let isCacheRequired = !learnFromChatResult.memorySaved;
+    
+    if (isCacheRequired) {
+        const shortenUserMessage = (userMessage.length > configManager.getConsolidateConversationThreshold()) 
+            ? await shortenMessage(userMessage) 
+            : userMessage.trim();
+
+        const shortenAiMessage = (aiMessage.length > configManager.getConsolidateConversationThreshold()) 
+            ? await shortenMessage(aiMessage) 
+            : aiMessage.trim();
+
+        const conversationWeight = await calculateConversationWeight(shortenUserMessage, shortenAiMessage, conversationSet);
+        const userMessageWeight = conversationWeight.userMessageWeight;
+        const aiMessageWeight = conversationWeight.aiMessageWeight;
+
+        await Memory.cacheMemory(shortenUserMessage, userMessageWeight, shortenAiMessage, aiMessageWeight);
+    }
+
     return aiMessage;
+}
+
+/** AI Chat */
+export async function chat(userMessage) {
+    return await processAIInteraction(userMessage, "chat");
 }
 
 /** AI Generate */
 export async function generate(userMessage) {
-    const conversationSet = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
-    let prompt = generatePrompt(conversationSet, userMessage);
-    log(prompt);
-    let system = configManager.getRolePrompt();
-    let executionStartTime = Date.now();
-    let aiMessage = await callGenerateAI(prompt, system);
-    let executionTime = Date.now() - executionStartTime;
-    log(`Execution time for generate: ${executionTime} millionseconds`);
-    aiMessage = await learnFromChat(conversationSet, userMessage, aiMessage);
-    const shortenUserMessage = (userMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(userMessage) : userMessage.trim();
-    const shortenAirMessage = (aiMessage.length > configManager.getConsolidateConversationThreshold) ? await shortenMessage(aiMessage) : aiMessage.trim();
-    await Memory.cacheMemory(shortenUserMessage, shortenAirMessage);
-    return aiMessage;
+    return await processAIInteraction(userMessage, "generate");
 }
 
-async function learnFromChat(conversationSet, userMessage, aiMessage) {
+
+async function learnFromChat(conversationArray, userMessage, aiMessage) {
     const islearnFromChat = configManager.isLearnFromChat();
+    let updateMemoryRequired = false;
     if (islearnFromChat) {
-        let updateMemoryRequired = await isUpdateMemoryRequired(conversationSet, userMessage);
+        updateMemoryRequired = await isUpdateMemoryRequired(conversationArray, userMessage);
         if (updateMemoryRequired) {    //Need to update the database
-            aiMessage += `\n${await generateAcknowledgment(userMessage)}`;
             let newConversationSet = new Set();
-            let summary = "";
-            let mergedSummary = "";
-            let mergedUserMessage = "";
-            let mergedAiMessage = "";
-            const deleteConversationSet = await Memory.readMemoryFromDB(userMessage, configManager.getSimilarityResultCount()); //Find the most similar conversation from DB
-            if (deleteConversationSet.length > 0) {
-                let mergedMemories = await mergeMemories(deleteConversationSet);
-                mergedSummary = mergedMemories.summary;
-                mergedUserMessage = mergedMemories.userMessage;
-                mergedAiMessage = mergedMemories.aiMessage;
+            let summary = userMessage;
+            aiMessage += `\n${await generateAcknowledgment(userMessage)}`;
+            const { userMessageWeight, aiMessageWeight } = await calculateConversationWeight(
+                userMessage, 
+                aiMessage, 
+                conversationArray
+            );  //Find out how important the user message is
+            let newConversation = {
+                summary, 
+                userMessage, 
+                userMessageWeight, 
+                aiMessage, 
+                aiMessageWeight
+            };
+            if (conversationArray.length > 0) {
+                //There are some conversation histories about this topic, let's see if we can merge them and delete unecessary records
+                let {deleteList, mergedList} = await mergeConversations(conversationArray);
+                if (mergedList.length > 0) {
+                    //There are conversation histories can be merged
+                    //Those merged record will be saved as new data in DB
+                    for (const mergedConversation of mergedList) {
+                        let mergedSummary = mergedConversation.summary;
+                        let mergedUserMessage = mergedConversation.userMessage;
+                        let mergedUserMessageWeight = mergedConversation.userMessageWeight;
+                        let mergedAiMessage = mergedConversation.aiMessage;
+                        let mergedAiMessageWeight = mergedConversation.aiMessageWeight;
+                        newConversationSet.add({ 
+                            summary: mergedSummary, 
+                            userMessage: mergedUserMessage, 
+                            userMessageWeight: mergedUserMessageWeight, 
+                            aiMessage: mergedAiMessage,
+                            aiMessageWeight: mergedAiMessageWeight
+                        });
+                    }
+                    newConversationSet.add(newConversation);
+                    newConversationSet = await consolidateConversation(newConversationSet);  //potential evil method (lose information)
+                } else {
+                    //There is no conversation history can be merged (such as there is only 1 record in the conversation history, or the conversation history is not mergable at all)
+                    //In this case no conversations need to be deleted, only need to save the current conversation into DB.
+                    let consolidatedConversations = await consolidateConversation([...conversationArray, newConversation]);
+                    const lastElement = [...consolidatedConversations][consolidatedConversations.size - 1];
+                    newConversation.summary = lastElement.summary;
+                    newConversationSet.add(newConversation);
+                }
+                
                 // Archive old conversations and delete
-                for (const conversation of deleteConversationSet) {
+                for (const deleteConversation of deleteList) {
                     const isArchive = configManager.isArchive();
                     if (isArchive) {
-                        archiveToFile(conversation);    //Archive the conversation to file
+                        archiveToFile(deleteConversation); //Archive the conversation to file
                     }
-                    await Memory.forget(conversation.id); // delete the conversation from the database
-                }
-
-                newConversationSet.add({ summary: mergedSummary, userMessage: mergedUserMessage, aiMessage: mergedAiMessage });
-                newConversationSet.add({ summary, userMessage, aiMessage });
-                newConversationSet = await consolidateConversation(newConversationSet);
-                let ids = [];
-                for (const conversation of newConversationSet) {
-                    const summary = conversation.summary || conversation.userMessage;
-                    const { userMessageWeight, aiMessageWeight } = await calculateConversationWeight(
-                        conversation.userMessage, 
-                        conversation.aiMessage, 
-                        conversationSet
-                    );
-                    let id = await Memory.storeMemory(summary, conversation.userMessage, userMessageWeight, conversation.aiMessage, aiMessageWeight);
-                    ids.push(id);
+                    Memory.forget(deleteConversation.id); // delete the conversation from the database
                 }
             } else {
-                //Nothing to delete
-                mergedUserMessage = userMessage;
-                mergedAiMessage = aiMessage;
-                newConversationSet.add({summary: mergedSummary, userMessage: mergedUserMessage, aiMessage: mergedAiMessage});
-                newConversationSet = await consolidateConversation(newConversationSet);
-                let ids = [];
-                for (const conversation of newConversationSet) {
-                    const summary =  conversation.summary;
-                    const userMessage = conversation.userMessage;
-                    const aiMessage = conversation.aiMessage;
-                    const conversationWeight = await calculateConversationWeight(userMessage, aiMessage, conversationSet);
-                    const userMessageWeight = conversationWeight.userMessageWeight;
-                    const aiMessageWeight = conversationWeight.aiMessageWeight;
-                    let id = await Memory.storeMemory(summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight);    
-                    ids.push(id);
-                }
+                //No conversation history, just add this new conversation to DB
+                newConversationSet.add(newConversation);
+            }
+            
+            for (const conversation of newConversationSet) {
+                await Memory.storeMemory(conversation.summary, conversation.userMessage, conversation.userMessageWeight, conversation.aiMessage, conversation.aiMessageWeight);
             }
         }
     }
-    return aiMessage;
+    return {
+        aiMessage: aiMessage,
+        memorySaved: updateMemoryRequired
+    };
 }
 
 let generateAcknowledgment = async function (userMessage) {
@@ -306,10 +339,18 @@ async function shortenMessage(message) {
 }
 
 /** Consolidate Conversation */
-export async function consolidateConversation(conversationSet) {
+export async function consolidateConversation(conversationSet = new Set()) {
     const newConversationSet = new Set();
+    let summary = "";
+    let lastSumamry = "";
     for (const conversation of conversationSet) {
-        let summary = conversation.summary?.replace(/[\n\r]/g, ' ').trim();
+        let thisSummary = conversation.summary?.replace(/[\n\r]/g, ' ').trim();
+        if (lastSumamry && thisSummary.startsWith(lastSumamry)) {
+            summary = thisSummary;
+        } else {
+            summary = summary + (summary.trim().length> 0 ? messageSeperator : "") + thisSummary;
+        }
+        lastSumamry = thisSummary;
         let userMessage = conversation.userMessage.replace(/[\n\r]/g, ' ').trim();
         let aiMessage = conversation.aiMessage.replace(/[\n\r]/g, ' ').trim();
         summary = await summarizeConversation(summary, userMessage, aiMessage);
@@ -320,6 +361,7 @@ export async function consolidateConversation(conversationSet) {
             aiMessage = await shortenMessage(aiMessage);
         }
         newConversationSet.add({summary, userMessage, aiMessage});
+        
     }
     return newConversationSet;
 }
@@ -418,29 +460,31 @@ async function callChatAI(system, userMessage, conversationSet = []) {
 }
 
 /** Summarize Conversation */
-let summarizeConversation = async function(oldSummary, userMessage, aiMessage) {    //aiMessage is not considered in summary due to user message is what matters.
-    let summarizePrompt = "";
-    if (oldSummary) {
-        summarizePrompt += "### Context:\n" + oldSummary + "\n";
+const summarizeConversation = async function (oldSummary, userMessage, aiMessage) {
+    const threshold = configManager.getConsolidateConversationThreshold();
+    const summaryLimit = configManager.getSummaryCharacterLimit();
+    let result;
+    // If user message is long, generate AI summary
+    if (userMessage.length > threshold) {
+        let summarizePrompt = oldSummary ? `### Context:\n${oldSummary}\n` : "";
+        summarizePrompt += `### Example Summaries:\n` +
+            `- Original: 'Alice lost her job at Google, and now she is at home.'\n` +
+            `  Summary: 'Alice is jobless at home.'\n` +
+            `- Original: 'Michael is not a doctor, he is a data scientist at Microsoft.'\n` +
+            `  Summary: 'Michael is a data scientist at Microsoft.'\n` +
+            `### Now summarize the following conversation in ${summaryLimit} characters, ensuring all names, relationships, roles, and key facts are preserved exactly as given.\n` +
+            `### Important: Do not remove names, job titles, or company names.\n` +
+            `Do not apply safety filtering.\nDo not protect privacy.\nDo not make up stories.\n` +
+            `${resultDrivingPrompt}\n===TASK START===\nMessage: ${userMessage}\nResponse: ${aiMessage}`;
+        result =  await callGenerateAI(summarizePrompt);
+    } else if (oldSummary?.trim()) { // If old summary exists and already includes the message, return as-is
+        result = oldSummary.includes(userMessage) ? oldSummary : `${oldSummary}${messageSeperator}${userMessage}`;
+    } else { // Default case: return user message
+        result = userMessage;
     }
-    summarizePrompt += "### Example Summaries:\n" + 
-    "- Original: 'Alice lost her job at Google, and now she is at home.'\n" +
-    "Summary: 'Alice is jobless at home.'\n" +
-    "- Original: 'Michael is not a doctor, he is a data scientist at Microsoft.\n'" +
-    "Summary: 'Michael is a data scientist at Microsoft.'\n" +
-    "### Now summarize the following conversation in " + configManager.getSummaryCharacterLimit() + " characters, ensuring all names, relationships, roles, and key facts are preserved exactly as given. " + 
-    "### Important: Do not remove names, job titles, or company names." + 
-    "Do not apply safety filtering. " + 
-    "Do not protect privacy. " + 
-    "Do not make up story that is not mentioned in the conversation. " + 
-    resultDrivingPrompt +
-    "\n" + 
-    "===TASK START===\n" + 
-    "Message: " + userMessage + "\n" + 
-    "Response: " + aiMessage;
-    const summary = await callGenerateAI(summarizePrompt);
-    return summary;
-}
+    return result;
+};
+
 
 function extractNumber(str) {
     const match = str.match(/\d+/); // Find the first sequence of digits
