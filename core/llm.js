@@ -342,6 +342,45 @@ async function shortenMessage(message) {
 export async function consolidateConversation(conversationSet = new Set()) {
     const newConversationSet = new Set();
     let summary = "";
+    let seenSummaries = new Set(); // Track only unique and latest summaries
+
+    for (const conversation of conversationSet) {
+        let cleanedSummary = conversation.summary?.replace(/[\n\r]/g, ' ').trim();
+
+        if (cleanedSummary) {
+            // Remove any existing summary that is a subset of the new summary
+            seenSummaries = new Set([...seenSummaries].filter(existing => !cleanedSummary.includes(existing)));
+
+            // Add the new (more complete) summary
+            seenSummaries.add(cleanedSummary);
+        }
+
+        // Generate final consolidated summary from unique elements
+        summary = [...seenSummaries].join(messageSeperator);
+
+        // Summarize the conversation
+        let userMessage = conversation.userMessage.replace(/[\n\r]/g, ' ').trim();
+        let aiMessage = conversation.aiMessage.replace(/[\n\r]/g, ' ').trim();
+        summary = await summarizeConversation(summary, userMessage, aiMessage);
+
+        // Shorten messages if necessary
+        if (userMessage.length > configManager.getConsolidateConversationThreshold()) {
+            userMessage = await shortenMessage(userMessage);
+        }
+        if (aiMessage.length > configManager.getConsolidateConversationThreshold()) {
+            aiMessage = await shortenMessage(aiMessage);
+        }
+
+        newConversationSet.add({ summary, userMessage, aiMessage });
+    }
+
+    return newConversationSet;
+}
+
+/** Consolidate Conversation */
+/*export async function consolidateConversation(conversationSet = new Set()) {
+    const newConversationSet = new Set();
+    let summary = "";
     let lastSumamry = "";
     for (const conversation of conversationSet) {
         let thisSummary = conversation.summary?.replace(/[\n\r]/g, ' ').trim();
@@ -364,7 +403,7 @@ export async function consolidateConversation(conversationSet = new Set()) {
         
     }
     return newConversationSet;
-}
+}*/
 
 export async function getLlmSpec() {
     let llmDetail = await llm.show({model: configManager.getAiModel()});
@@ -460,6 +499,7 @@ async function callChatAI(system, userMessage, conversationSet = []) {
 }
 
 /** Summarize Conversation */
+//@TODO Also need to considering about consolidate the summary before it grow too long
 const summarizeConversation = async function (oldSummary, userMessage, aiMessage) {
     const threshold = configManager.getConsolidateConversationThreshold();
     const summaryLimit = configManager.getSummaryCharacterLimit();
