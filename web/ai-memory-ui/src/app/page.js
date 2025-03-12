@@ -45,27 +45,50 @@ export default function Home() {
     // Send AI Message
     const sendMessage = async () => {
         if (!chatInput.trim()) return;
-
-        setMessages([...messages, { sender: "User", text: chatInput.trim() }]);
+    
+        const userMessage = chatInput.trim();
         setChatInput("");
-        const endpoint = mode === "chat" ? "/api/chat" : "/api/generate"; // Choose API based on selected mode
-
-
+    
+        // Ensure user message is displayed immediately
+        setMessages((prev) => [...prev, { sender: "User", text: userMessage }]);
+    
+        const endpoint = mode === "chat" ? "/api/chat" : "/api/generate";
+    
         try {
             const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userMessage: chatInput.trim() }),
+                body: JSON.stringify({ userMessage }),
             });
-
-            const data = await response.json();
-            if (data.aiMessage) {
-                setMessages((prev) => [...prev, { sender: "AI", text: data.aiMessage }]);
+    
+            if (!response.body) return;
+    
+            const reader = response.body.getReader();
+            let aiMessage = ""; // Store the response text
+    
+            // Add an empty AI response placeholder in the chat
+            setMessages((prev) => [...prev, { sender: "AI", text: "" }]);
+    
+            const updateLastMessage = (text) => {
+                setMessages((prev) => {
+                    const updatedMessages = [...prev];
+                    updatedMessages[updatedMessages.length - 1] = { sender: "AI", text };
+                    return updatedMessages;
+                });
+            };
+    
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+    
+                const token = new TextDecoder().decode(value); // Not needed anymore
+                aiMessage += token; // Directly append the token
+                updateLastMessage(aiMessage);
             }
         } catch (error) {
             console.error("Error:", error);
         }
-    };
+    };    
 
     // Store Memory
     const storeMemory = async () => {

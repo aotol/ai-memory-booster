@@ -34,15 +34,39 @@ app.post("/retrieve-memory", async (req, res) => {
 });
 
 app.post("/chat", async (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
     const { userMessage } = req.body;
-    const response = await AI_Memory.chat(userMessage);
-    res.json({ aiMessage: response });
+    if (!userMessage) {
+        res.write("data: Error: userMessage is required\n\n");
+        res.end();
+        return;
+    }
+    
+    await AI_Memory.chat(userMessage, true, (token) => {
+        res.write(`data: ${token}\n\n`);
+    });
+    res.end();
 });
 
 app.post("/generate", async (req, res) => {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
     const { userMessage } = req.body;
-    const response = await AI_Memory.generate(userMessage);
-    res.json({ aiMessage: response });
+    if (!userMessage) {
+        res.write("data: Error: userMessage is required\n\n");
+        res.end();
+        return;
+    }
+    
+    await AI_Memory.generate(userMessage, true, (token) => {
+        res.write(`data: ${token}\n\n`);
+    });
+    res.end();
 });
 
 app.get("/forget", async (req, res) => {

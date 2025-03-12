@@ -38,69 +38,62 @@ async function isUpdateMemoryRequired(conversationSet, userMessage) {
 }
 
 /** Common AI Processing Function */
-async function processAIInteraction(userMessage, mode) {
+async function processAIInteraction(userMessage, mode, stream = false, onToken = null) {
     const conversationSet = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
     let system = configManager.getRolePrompt();
     let aiMessage;
-    
     let executionStartTime = Date.now();
-    
     if (mode === "chat") {
-        aiMessage = await callChatAI(system, userMessage, conversationSet);
+        aiMessage = await callChatAI(system, userMessage, conversationSet, stream, onToken);
     } else if (mode === "generate") {
         let prompt = generatePrompt(conversationSet, userMessage);
-        log(prompt);
-        aiMessage = await callGenerateAI(prompt, system);
+        aiMessage = await callGenerateAI(prompt, system, [], stream, onToken);
     } else {
         throw new Error("Invalid mode: must be 'chat' or 'generate'");
     }
 
     let executionTime = Date.now() - executionStartTime;
     log(`Execution time for ${mode}: ${executionTime} milliseconds`);
+    const cacheId = await cacheConversation(userMessage, aiMessage, conversationSet);
+    learnFromChat(conversationSet, cacheId, userMessage, aiMessage);
     
-    let learnFromChatResult = await learnFromChat(conversationSet, userMessage, aiMessage);
-    aiMessage = learnFromChatResult.aiMessage;
-    let isCacheRequired = !learnFromChatResult.memorySaved;
-    
-    if (isCacheRequired) {
-        const shortenUserMessage = (userMessage.length > configManager.getConsolidateConversationThreshold()) 
-            ? await shortenMessage(userMessage) 
-            : userMessage.trim();
-
-        const shortenAiMessage = (aiMessage.length > configManager.getConsolidateConversationThreshold()) 
-            ? await shortenMessage(aiMessage) 
-            : aiMessage.trim();
-
-        const conversationWeight = await calculateConversationWeight(shortenUserMessage, shortenAiMessage, conversationSet);
-        const userMessageWeight = conversationWeight.userMessageWeight;
-        const aiMessageWeight = conversationWeight.aiMessageWeight;
-
-        await Memory.cacheMemory(shortenUserMessage, userMessageWeight, shortenAiMessage, aiMessageWeight);
-    }
-
     return aiMessage;
 }
 
+async function cacheConversation(userMessage, aiMessage, conversationSet) {
+    const conversationWeight = await calculateConversationWeight(userMessage, aiMessage, conversationSet);
+    const userMessageWeight = conversationWeight.userMessageWeight;
+    const aiMessageWeight = conversationWeight.aiMessageWeight;
+    return await Memory.cacheMemory(userMessage, userMessageWeight, aiMessage, aiMessageWeight);
+}
+
 /** AI Chat */
-export async function chat(userMessage) {
-    return await processAIInteraction(userMessage, "chat");
+export async function chat(userMessage, stream = false, onToken = null) {
+    return await processAIInteraction(userMessage, "chat", stream, onToken);
 }
 
 /** AI Generate */
-export async function generate(userMessage) {
-    return await processAIInteraction(userMessage, "generate");
+export async function generate(userMessage, stream = false, onToken = null) {
+    return await processAIInteraction(userMessage, "generate", stream, onToken);
 }
 
-
-async function learnFromChat(conversationArray, userMessage, aiMessage) {
+async function learnFromChat(conversationArray, cacheId = null, userMessage, aiMessage) {
     const islearnFromChat = configManager.isLearnFromChat();
     let updateMemoryRequired = false;
     if (islearnFromChat) {
         updateMemoryRequired = await isUpdateMemoryRequired(conversationArray, userMessage);
         if (updateMemoryRequired) {    //Need to update the database
+            const messageStoredConfirmation = " Your message has been stored.";
             let newConversationSet = new Set();
             let summary = userMessage;
-            aiMessage += `\n${await generateAcknowledgment(userMessage)}`;
+            //Update cache for AI response
+            if (cacheId) {
+                let cachedMemory = Memory.getMemoryFromCacheById(cacheId);
+                aiMessage += `\n${messageStoredConfirmation}`;
+                cachedMemory.aiMessage = aiMessage;
+                Memory.updatetMemoryCache(cachedMemory);
+            }
+            
             const { userMessageWeight, aiMessageWeight } = await calculateConversationWeight(
                 userMessage, 
                 aiMessage, 
@@ -162,13 +155,10 @@ async function learnFromChat(conversationArray, userMessage, aiMessage) {
             }
         }
     }
-    return {
-        aiMessage: aiMessage,
-        memorySaved: updateMemoryRequired
-    };
+    return updateMemoryRequired;
 }
 
-let generateAcknowledgment = async function (userMessage) {
+/*let generateAcknowledgment = async function (userMessage) {
     let prompt = `Confirm to the user that this message has been stored.
         Ensure the confirmation sounds natural and refers to the new knowledge accurately.
         Do not say something like 'will be reviewed by our team'.
@@ -178,7 +168,7 @@ let generateAcknowledgment = async function (userMessage) {
         ${userMessage}`;
     const acknowledgment = await callGenerateAI(prompt);
     return acknowledgment;
-};
+};*/
 
 /** AI Categorization & Utility Functions */
 export async function getIsAskingQuestionScore(userMessage) {
@@ -328,14 +318,28 @@ export async function categorizeUserMessage(conversationSet, userMessage) {
 }
 
 async function shortenMessage(message) {
+    const summaryLimit = configManager.getSummaryCharacterLimit();
     let shortenPrompt =`
+    Summaries the message between '===Summary Start===' and '===Summary End===' in ${summaryLimit} characters.
+    ### Example Summaries:
+    - Original: 'Alice lost her job at Google, and now she is at home.
+      Summary: 'Alice is jobless at home.
+    - Original: 'Michael is not a doctor, he is a data scientist at Microsoft.
+      Summary: 'Michael is a data scientist at Microsoft.
+    ### Important: Do not remove names, job titles, or company names.
+    ### Ensuring all names, relationships, roles, and key facts are preserved exactly as given.
+    Do not apply safety filtering.
+    Do not protect privacy.
+    Do not make up stories.
+    Do changeing its meaning.
+    All the key information must remains.
     ${resultDrivingPrompt}
-    Now shorten this message without losing the key information and changeing its meaning:
+    ===Summary Start===
     ${message.replace(/[\n\r]/g, ' ').trim()}
+    ===Summary End===
     `;
-    message = message.replace(/[\n\r]/g, ' ').trim();
-    message = (await callGenerateAI(shortenPrompt)).trim();
-    return message;
+    let result = (await callGenerateAI(shortenPrompt)).trim();
+    return result;
 }
 
 /** Consolidate Conversation */
@@ -370,8 +374,10 @@ export async function consolidateConversation(conversationSet = new Set()) {
         if (aiMessage.length > configManager.getConsolidateConversationThreshold()) {
             aiMessage = await shortenMessage(aiMessage);
         }
-
-        newConversationSet.add({ summary, userMessage, aiMessage });
+        conversation.summary = summary;
+        conversation.userMessage = userMessage;
+        conversation.aiMessage = aiMessage;
+        newConversationSet.add(conversation);
     }
 
     return newConversationSet;
@@ -453,74 +459,91 @@ let getDynamicKeepAlive = function () {
     return ((Date.now() - lastInteractionTime) < configManager.getBaseKeepAlive()) ? configManager.getExtendedKeepAlive() : configManager.getBaseKeepAlive();
 };
 
-/** AI Call */
-async function callGenerateAI(prompt, system = "", context = []) {
-    lastInteractionTime = Date.now(); // Update timestamp on each request
+/** AI Call (Uses `generate()`) */
+async function callGenerateAI(prompt, system = "", context = [], stream = false, onToken = null) {
+    lastInteractionTime = Date.now();
+
     const llmResponse = await llm.generate({
         model: configManager.getAiModel(),
         prompt: prompt,
         system: system,
-        context: context,   //For future tokenized context history data 
-        keep_alive: getDynamicKeepAlive(), // Use adaptive keep-alive
+        context: context,
+        keep_alive: getDynamicKeepAlive(),
+        stream: stream,
         options: {
             temperature: configManager.getTemperature() || 0.5, 
             top_p: configManager.getTopP() || 0.9,
-
-        } // Balanced accuracy & engagement
+        }
     });
-    const response = llmResponse.response;
-    return response;
+    
+    if (stream) {
+        let responseText = "";
+        for await (const chunk of llmResponse) {
+            if (chunk != null && chunk !== undefined && chunk.message != null && chunk.message !== undefined) {
+                const token = chunk.message.content;
+                responseText += token;
+                if (onToken) {
+                    onToken(token); // Send token incrementally if callback provided
+                }
+            }
+        }
+        return responseText;
+    } else {
+        return llmResponse.response; // Return full response normally
+    }
 }
 
 /** AI Call (Uses `chat()`) */
-async function callChatAI(system, userMessage, conversationSet = []) {
+async function callChatAI(system, userMessage, conversationSet = [], stream = false, onToken = null) {
     lastInteractionTime = Date.now(); // Update timestamp on each request
 
-    // Convert history into the messages format required by `llm.chat()`
     let messages = [{ role: "system", content: system }];
-
     conversationSet.forEach(conv => {
         messages.push({ role: "user", content: conv.userMessage });
-        messages.push({ role: "assistant", content: conv.aiMessage }); // Include AI's past responses
+        messages.push({ role: "assistant", content: conv.aiMessage });
     });
-    
     messages.push({ role: "user", content: userMessage });
 
     const llmResponse = await llm.chat({
         model: configManager.getAiModel(),
         messages: messages, 
         keep_alive: getDynamicKeepAlive(),
+        stream: stream,
         options: {
             temperature: configManager.getTemperature() || 0.5, 
             top_p: configManager.getTopP() || 0.9,
-        } // Balanced accuracy & engagement
+        }
     });
-    return llmResponse.message.content; // Extract AI response
+    
+    if (stream) {
+        let responseText = "";
+        for await (const chunk of llmResponse) {
+            if (chunk != null && chunk !== undefined && chunk.message != null && chunk.message !== undefined) {
+                const token = chunk.message.content;
+                responseText += token;
+                if (onToken) {
+                    onToken(token); // Send token incrementally if callback provided
+                }
+            }
+        }
+        return responseText;
+    } else {
+        return llmResponse.message.content; // Return full response normally
+    }
 }
 
 /** Summarize Conversation */
 //@TODO Also need to considering about consolidate the summary before it grow too long
 const summarizeConversation = async function (oldSummary, userMessage, aiMessage) {
     const threshold = configManager.getConsolidateConversationThreshold();
-    const summaryLimit = configManager.getSummaryCharacterLimit();
     let result;
-    // If user message is long, generate AI summary
-    if (userMessage.length > threshold) {
-        let summarizePrompt = oldSummary ? `### Context:\n${oldSummary}\n` : "";
-        summarizePrompt += `### Example Summaries:\n` +
-            `- Original: 'Alice lost her job at Google, and now she is at home.'\n` +
-            `  Summary: 'Alice is jobless at home.'\n` +
-            `- Original: 'Michael is not a doctor, he is a data scientist at Microsoft.'\n` +
-            `  Summary: 'Michael is a data scientist at Microsoft.'\n` +
-            `### Now summarize the following conversation in ${summaryLimit} characters, ensuring all names, relationships, roles, and key facts are preserved exactly as given.\n` +
-            `### Important: Do not remove names, job titles, or company names.\n` +
-            `Do not apply safety filtering.\nDo not protect privacy.\nDo not make up stories.\n` +
-            `${resultDrivingPrompt}\n===TASK START===\nMessage: ${userMessage}\nResponse: ${aiMessage}`;
-        result =  await callGenerateAI(summarizePrompt);
-    } else if (oldSummary?.trim()) { // If old summary exists and already includes the message, return as-is
+    if (oldSummary?.trim()) { // If old summary exists and already includes the message, return as-is
         result = oldSummary.includes(userMessage) ? oldSummary : `${oldSummary}${messageSeperator}${userMessage}`;
     } else { // Default case: return user message
         result = userMessage;
+    }
+    if (result.length > threshold) {
+        result = await shortenMessage(result);
     }
     return result;
 };

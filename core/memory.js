@@ -72,7 +72,8 @@ async function initialize() {
     initializeCache();
 }
 
-export async function cacheMemory(userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0) {
+export async function cacheMemory(userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0, timestamp = Date.now()) {
+    let id;
     try {
         // Convert userMessage to an embedding vector
         const embedding = await ollamaEmbeddings.embedQuery(userMessage);
@@ -95,25 +96,23 @@ export async function cacheMemory(userMessage, userMessageWeight = 0, aiMessage,
         cache.add(reducedEmbedding);
 
         // Get the updated index count after insertion
-        const id = cache.ntotal() - 1;
-        const timestamp = Date.now();
+        id = cache.ntotal() - 1;
 
         // Store metadata separately
         memoryMetadata.push({ id, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp });
         log("Memory cached successfully.");
-
     } catch (error) {
         console.error("Error caching memory:", error);
     }
+    return id;
 }
 
 /** Store Memory */
-export async function storeMemory(summary, userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0) {
+export async function storeMemory(summary, userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0, timestamp = Date.now()) {
     if (!summary) {
         summary = await summarizeConversation("", userMessage, aiMessage);
     }
     const id = randomUUID();
-    const timestamp = Date.now();
     const vector = await ollamaEmbeddings.embedQuery(summary);
     const reducedVector = adjustVectorSize(vector);
     if (await isChromaDBAvailable()) {
@@ -181,7 +180,7 @@ export async function readMemoryFromCache (userMessage, similarityResultCount) {
         labels.forEach(label => {
             const distance = distances[i] ?? Infinity;
             const id = label;   //id in cache
-            const result = getMemoryById(id);
+            const result = getMemoryFromCacheById(id);
             const summary = result?.userMessage || "";
             const userMessage = result?.userMessage || "";
             const userMessageWeight = result?.userMessageWeight || 0;
@@ -205,8 +204,18 @@ export async function readMemoryFromCache (userMessage, similarityResultCount) {
     return conversationSet;
 }
 
-function getMemoryById(id) {
+export function getMemoryFromCacheById(id) {
     return memoryMetadata.find(memory => memory.id === id);
+}
+
+export function updatetMemoryCache(memory) {
+    const index = memoryMetadata.findIndex(memoryItem => memoryItem.id === memory.id);
+    if (index !== -1) {
+        // Update the existing memory in the cache
+        memoryMetadata[index] = memory;
+    } else {
+        throw new Error(`Memory with ID ${memory.id} not found in cache.`);
+    }
 }
 
 export async function readMemoryFromCacheAndDB(userMessage, similarityResultCount) {
@@ -273,7 +282,15 @@ function mergeConversationSet(conversationSetFromDB, conversationSetFromCache) {
     let mergedSet = [...conversationSetFromDB, ...conversationSetFromCache];
     // Sort by timestamp (ascending order)
     let sortedConversations = sortConversationSet(mergedSet);    //It is now in array (Not Set)
-    return sortedConversations;
+    // Remove duplicates while keeping the highest-weight/latest-timestamp entry
+    let uniqueConversations = new Map();
+    sortedConversations.forEach(conv => {
+        let key = `${conv.summary}-${conv.userMessage}`; // Unique key based on summary + userMessage
+        if (!uniqueConversations.has(key)) {
+            uniqueConversations.set(key, conv);
+        }
+    });
+    return Array.from(uniqueConversations.values());
 }
 
 let convertChromaResultToConversationSet = function (retrievedMemories) {
