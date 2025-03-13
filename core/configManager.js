@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
     "chromaDBHost": "http://localhost:8000",
     "tenant": "default_tenant",
     "collection": "ai_memory_booster",
-    "rolePrompt": "You are a personal assistant. The following is the conversation history to understand the background. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n",
+    "rolePrompt": "You are a personal assistant. 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', 'me' or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n",
     "debug": false,
     "archive": false
 };

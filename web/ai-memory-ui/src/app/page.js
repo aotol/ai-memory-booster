@@ -20,11 +20,12 @@ export default function Home() {
     const [memorySummary, setMemorySummary] = useState("");
     const [retrievedMemories, setRetrievedMemories] = useState([]);
     const [llmSpec, setLlmSpec] = useState(null);
+    const [version, setVersion] = useState("");
     const [showSpec, setShowSpec] = useState(false);
     const [config, setConfig] = useState({});
     const [configText, setConfigText] = useState(""); // For editing JSON
     const chatEndRef = useRef(null); // Auto-scroll ref
-
+    const [isSending, setIsSending] = useState(false);
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     };
@@ -40,12 +41,12 @@ export default function Home() {
     // Load configuration when the page opens
     useEffect(() => {
         fetchConfig();
+        fetchSystem();
     }, []);
 
     // Send AI Message
     const sendMessage = async () => {
-        if (!chatInput.trim()) return;
-    
+        if (!chatInput.trim() || isSending) return;
         const userMessage = chatInput.trim();
         setChatInput("");
     
@@ -55,6 +56,7 @@ export default function Home() {
         const endpoint = mode === "chat" ? "/api/chat" : "/api/generate";
     
         try {
+            setIsSending(true); // Disable button
             const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -87,6 +89,8 @@ export default function Home() {
             }
         } catch (error) {
             console.error("Error:", error);
+        } finally {
+            setIsSending(false); // Re-enable button after response
         }
     };    
 
@@ -161,6 +165,18 @@ export default function Home() {
         }
     };
 
+    // Fetch system info
+    const fetchSystem = async () => {
+        try {
+            const response = await fetch("/api/system");
+            const data = await response.json();
+            const version = data.version;
+            setVersion(version);
+        } catch (error) {
+            console.error("Error fetching LLM spec:", error);
+        }
+    };
+
     // Forget all stored memory
     const forgetMemory = async () => {
         try {
@@ -212,7 +228,7 @@ export default function Home() {
 
     return (
         <div className="flex flex-col items-center min-h-screen p-4 bg-gray-100">
-            <h1 className="text-2xl font-bold mb-4">AI Memory Booster Chat</h1>
+            <h1 className="text-2xl font-bold mb-4">AI Memory Booster Chat <span className="text-xs text-gray-500 font-thin">(Version: {version})</span></h1>
             {/* Chat / Generate Toggle */}
             <div className="flex items-center mb-4 space-x-4">
                 <label className="font-semibold">Mode:</label>
@@ -263,8 +279,8 @@ export default function Home() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                />
-                <button className="bg-blue-500 text-white px-4 py-2 rounded-r-lg" onClick={sendMessage}>
+                />&nbsp;
+                <button className={`px-4 py-2 rounded-r-lg transition-colors ${isSending ? "bg-gray-400 cursor-not-allowed text-white" : "bg-blue-500 hover:bg-blue-600 text-white"}`} disabled={isSending} onClick={sendMessage}>
                     Send
                 </button>
             </div>

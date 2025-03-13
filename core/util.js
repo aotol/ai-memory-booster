@@ -239,3 +239,8 @@ export function averagePoolingTruncate(embedding, targetDimension = 256) {
         embedding.slice(i * factor, (i + 1) * factor).reduce((sum, val) => sum + val, 0) / factor
     );
 }
+
+export function extractNumber(str) {
+    const match = str.match(/\d+/); // Find the first sequence of digits
+    return match ? parseInt(match[0], 10) : NaN;
+}

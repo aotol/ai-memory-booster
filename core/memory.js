@@ -15,7 +15,7 @@ import { randomUUID } from "crypto";
 import configManager from "./configManager.js";
 import {ollamaEmbeddings} from "./llm.js";
 import {log} from "./debug.js";
-import { adjustVectorSize, sortConversationSet } from "./util.js";
+import { adjustVectorSize, sortConversationSet, calculateConversationWeight } from "./util.js";
 
 const collectionName = configManager.getCollection(); // ChromaDB Collection
 let chromaClient;
@@ -72,7 +72,14 @@ async function initialize() {
     initializeCache();
 }
 
-export async function cacheMemory(userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0, timestamp = Date.now()) {
+export async function cacheConversation(userMessage, aiMessage, conversationSet) {
+    const conversationWeight = await calculateConversationWeight(userMessage, aiMessage, conversationSet);
+    const userMessageWeight = conversationWeight.userMessageWeight;
+    const aiMessageWeight = conversationWeight.aiMessageWeight;
+    return await cacheMemory(userMessage, userMessageWeight, aiMessage, aiMessageWeight);
+}
+
+async function cacheMemory(userMessage, userMessageWeight = 0, aiMessage, aiMessageWeight = 0, timestamp = Date.now()) {
     let id;
     try {
         // Convert userMessage to an embedding vector

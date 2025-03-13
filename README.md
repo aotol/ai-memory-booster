@@ -119,7 +119,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
   "chromaDBHost": "http://localhost:8000", // ChromaDB service URL (host and port)
   "tenant": "default_tenant", // ChromaDB tenant name
   "collection": "ai_memory_booster", // ChromaDB collection name used by AI Memory Booster
-  "rolePrompt": "You are a personal assistant. Below is the conversation history to understand the context. The conversation history is enclosed between 'Conversation History Start:' and 'Conversation History End.' 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', or 'my', it refers to the user, not you ('AI'). Do not fabricate responses.", // Prompt for how AI should respond based on past memory
+  "rolePrompt": "You are a personal assistant. 'AI' represents you, and 'User' represents the person currently talking to you. When the user says 'I', 'mine', 'me' or 'my', it refers to the user, not you ('AI'). Do not fabricate responses.", // Prompt for how AI should respond based on past memory
   "debug": false, // If turn on the debug message
   "archive": false, // If turn on the memory archive mode
 }

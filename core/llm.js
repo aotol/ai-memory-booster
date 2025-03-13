@@ -10,32 +10,15 @@ import { Ollama } from "ollama";
 import configManager from "./configManager.js";
 import * as Memory from "./memory.js"
 import { log } from "./debug.js";
-import { archiveToFile } from "./archive.js";
-import { mergeConversations, calculateConversationWeight, messageSeperator } from "./util.js";
+import { OllamaEmbeddings } from "@langchain/ollama";
+import {learnFromChat} from "./learn.js";
+import {messageSeperator} from "./util.js";
 let lastInteractionTime = Date.now();
 const llm = new Ollama();
-const askQuestionMarker = "#question";
-const complainMarker = "#complain";
-const gossipMarker = "#gossip";
-const newKnowledgeMarker = "#new_knowledge";
-const updateKnowledgeMarker = "#new_update";
-const uncategorizedMarker = "#uncategorized";
 const textEmbeddingModel = "nomic-embed-text:latest";
 const resultDrivingPrompt = "Only give the result and do not say anything else. ";
-const categoryReasonPrompt = "Also explain why you give this score. ";
-import { OllamaEmbeddings } from "@langchain/ollama";
-export const ollamaEmbeddings = new OllamaEmbeddings({ model: textEmbeddingModel });
 
-async function isUpdateMemoryRequired(conversationSet, userMessage) {
-    let category = await categorizeUserMessage(conversationSet, userMessage);
-    const isNewKnowledge = category.includes(newKnowledgeMarker);
-    const isNewUpdate = category.includes(updateKnowledgeMarker);
-    if (isNewKnowledge || isNewUpdate) {
-        return true;
-    } else {
-        return false;
-    }
-}
+export const ollamaEmbeddings = new OllamaEmbeddings({ model: textEmbeddingModel });
 
 /** Common AI Processing Function */
 async function processAIInteraction(userMessage, mode, stream = false, onToken = null) {
@@ -54,17 +37,10 @@ async function processAIInteraction(userMessage, mode, stream = false, onToken =
 
     let executionTime = Date.now() - executionStartTime;
     log(`Execution time for ${mode}: ${executionTime} milliseconds`);
-    const cacheId = await cacheConversation(userMessage, aiMessage, conversationSet);
+    const cacheId = await Memory.cacheConversation(userMessage, aiMessage, conversationSet);
     learnFromChat(conversationSet, cacheId, userMessage, aiMessage);
     
     return aiMessage;
-}
-
-async function cacheConversation(userMessage, aiMessage, conversationSet) {
-    const conversationWeight = await calculateConversationWeight(userMessage, aiMessage, conversationSet);
-    const userMessageWeight = conversationWeight.userMessageWeight;
-    const aiMessageWeight = conversationWeight.aiMessageWeight;
-    return await Memory.cacheMemory(userMessage, userMessageWeight, aiMessage, aiMessageWeight);
 }
 
 /** AI Chat */
@@ -75,246 +51,6 @@ export async function chat(userMessage, stream = false, onToken = null) {
 /** AI Generate */
 export async function generate(userMessage, stream = false, onToken = null) {
     return await processAIInteraction(userMessage, "generate", stream, onToken);
-}
-
-async function learnFromChat(conversationArray, cacheId = null, userMessage, aiMessage) {
-    const islearnFromChat = configManager.isLearnFromChat();
-    let updateMemoryRequired = false;
-    if (islearnFromChat) {
-        updateMemoryRequired = await isUpdateMemoryRequired(conversationArray, userMessage);
-        if (updateMemoryRequired) {    //Need to update the database
-            const messageStoredConfirmation = " Your message has been stored.";
-            let newConversationSet = new Set();
-            let summary = userMessage;
-            //Update cache for AI response
-            if (cacheId) {
-                let cachedMemory = Memory.getMemoryFromCacheById(cacheId);
-                aiMessage += `\n${messageStoredConfirmation}`;
-                cachedMemory.aiMessage = aiMessage;
-                Memory.updatetMemoryCache(cachedMemory);
-            }
-            
-            const { userMessageWeight, aiMessageWeight } = await calculateConversationWeight(
-                userMessage, 
-                aiMessage, 
-                conversationArray
-            );  //Find out how important the user message is
-            let newConversation = {
-                summary, 
-                userMessage, 
-                userMessageWeight, 
-                aiMessage, 
-                aiMessageWeight
-            };
-            if (conversationArray.length > 0) {
-                //There are some conversation histories about this topic, let's see if we can merge them and delete unecessary records
-                let {deleteList, mergedList} = await mergeConversations(conversationArray);
-                if (mergedList.length > 0) {
-                    //There are conversation histories can be merged
-                    //Those merged record will be saved as new data in DB
-                    for (const mergedConversation of mergedList) {
-                        let mergedSummary = mergedConversation.summary;
-                        let mergedUserMessage = mergedConversation.userMessage;
-                        let mergedUserMessageWeight = mergedConversation.userMessageWeight;
-                        let mergedAiMessage = mergedConversation.aiMessage;
-                        let mergedAiMessageWeight = mergedConversation.aiMessageWeight;
-                        newConversationSet.add({ 
-                            summary: mergedSummary, 
-                            userMessage: mergedUserMessage, 
-                            userMessageWeight: mergedUserMessageWeight, 
-                            aiMessage: mergedAiMessage,
-                            aiMessageWeight: mergedAiMessageWeight
-                        });
-                    }
-                    newConversationSet.add(newConversation);
-                    newConversationSet = await consolidateConversation(newConversationSet);  //potential evil method (lose information)
-                } else {
-                    //There is no conversation history can be merged (such as there is only 1 record in the conversation history, or the conversation history is not mergable at all)
-                    //In this case no conversations need to be deleted, only need to save the current conversation into DB.
-                    let consolidatedConversations = await consolidateConversation([...conversationArray, newConversation]);
-                    const lastElement = [...consolidatedConversations][consolidatedConversations.size - 1];
-                    newConversation.summary = lastElement.summary;
-                    newConversationSet.add(newConversation);
-                }
-                
-                // Archive old conversations and delete
-                for (const deleteConversation of deleteList) {
-                    const isArchive = configManager.isArchive();
-                    if (isArchive) {
-                        archiveToFile(deleteConversation); //Archive the conversation to file
-                    }
-                    Memory.forget(deleteConversation.id); // delete the conversation from the database
-                }
-            } else {
-                //No conversation history, just add this new conversation to DB
-                newConversationSet.add(newConversation);
-            }
-            
-            for (const conversation of newConversationSet) {
-                await Memory.storeMemory(conversation.summary, conversation.userMessage, conversation.userMessageWeight, conversation.aiMessage, conversation.aiMessageWeight);
-            }
-        }
-    }
-    return updateMemoryRequired;
-}
-
-/*let generateAcknowledgment = async function (userMessage) {
-    let prompt = `Confirm to the user that this message has been stored.
-        Ensure the confirmation sounds natural and refers to the new knowledge accurately.
-        Do not say something like 'will be reviewed by our team'.
-        ${resultDrivingPrompt}
-
-        Here is the message:
-        ${userMessage}`;
-    const acknowledgment = await callGenerateAI(prompt);
-    return acknowledgment;
-};*/
-
-/** AI Categorization & Utility Functions */
-export async function getIsAskingQuestionScore(userMessage) {
-    let prompt= "Is this message asking a question? (e.g., What is the time? Who are you? What's the weather like today? What do you work?) " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message is asking question, and 0 means definitely this message is not asking question. " + 
-    (configManager.isDebug() ? categoryReasonPrompt : "") +
-    //resultDrivingPrompt +
-    "===TASK START===\n" + 
-    "Message: " + userMessage;
-    const result = await callGenerateAI(prompt);
-    const score = extractNumber(result);
-    if (score > configManager.getCategorySureThreshold()) {
-        log(`### Is it a question? ${result}`);
-    }
-    return score;
-}
-
-export async function getGossipMarkerCategoryScore(userMessage) {
-    let prompt =
-    "Evaluate whether this message is only a social check-in (e.g., 'Hi', 'Hello', 'How are you?', 'Are you there?', 'Good morning') or acknowledgement (e.g., 'Good', 'I see', 'OK'). " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message is a check-in, and 0 means definitely this message is not a check-in. " + 
-    (configManager.isDebug() ? categoryReasonPrompt : "") +
-    //resultDrivingPrompt +
-    "===TASK START===\n" + 
-    "Message: " + userMessage;
-    const result = await callGenerateAI(prompt);
-    const score = extractNumber(result);
-    if (score > configManager.getCategorySureThreshold()) {
-        log(`### Is it a gossip? ${result}`);
-    }
-    return score;
-}
-
-export async function getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage) {
-    let prompt =
-    generateConversationHistoryPrompt(conversationSet) + 
-    "Has this message not been discussed in the conversation history? " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message has not been discussed in the conversation history, and 0 means this message has definitly discussed in the conversation history. " + 
-    (configManager.isDebug() ? categoryReasonPrompt : "") +
-    //resultDrivingPrompt +
-    "===TASK START===\n" + 
-    "Message: " + userMessage;
-    let system = configManager.getRolePrompt();
-    const result = await callGenerateAI(prompt, system);
-    const score = extractNumber(result);
-    if (score > configManager.getCategorySureThreshold()) {
-        log(`### Is it a new knowledge? ${result}`);
-    }
-    return score;
-}
-
-export async function getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage) {
-    let prompt=
-    generateConversationHistoryPrompt(conversationSet) + 
-    "Does this message update any existing information in the conversation history? " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message updates existing information in the conversation history, and 0 means definitely this message does not update any exisiting information in te conversation history. " + 
-    (configManager.isDebug() ? categoryReasonPrompt : "") +
-    //resultDrivingPrompt +
-    "===TASK START===\n" + 
-    "Message: " + userMessage;
-    let system = configManager.getRolePrompt();
-    const result = await callGenerateAI(prompt, system);
-    const score = extractNumber(result);
-    if (score > configManager.getCategorySureThreshold()) {
-        log(`### Is it a knowldge update? ${result}`);
-    }
-    return score;
-}
-
-export async function getIsComplainScore(userMessage) {
-    let prompt= "Is this message a complain? (e.g.: I am not happy! you are so stupid! I've told you many times!) " + 
-    "Respond with a likelihood score from 0 to 100, where 100 means 100% this message is a complain, and 0 means definitely this mssage is not a complain. " + 
-    (configManager.isDebug() ? categoryReasonPrompt : "") +
-    //resultDrivingPrompt +
-    "===TASK START===\n" + 
-    "Message: " + userMessage;
-    const result = await callGenerateAI(prompt);
-    const score = extractNumber(result);
-    if (score > configManager.getCategorySureThreshold()) {
-        log(`### Is it a complain? ${result}`);
-    }
-    return score;
-}
-
-/** Categorize User Message */
-export async function categorizeUserMessage(conversationSet, userMessage) {
-    // Run independent LLM calls in parallel
-    const [
-        complainCategoryScore,
-        gossipCategoryScore,
-        askingQuestionCategoryScore
-    ] = await Promise.all([
-        getIsComplainScore(userMessage),
-        getGossipMarkerCategoryScore(userMessage),
-        getIsAskingQuestionScore(userMessage),
-    ]);
-
-    const isAskingQuestion = askingQuestionCategoryScore > configManager.getCategorySureThreshold();
-    const isComplaining = complainCategoryScore > configManager.getCategorySureThreshold();
-    const isGossiping = gossipCategoryScore > configManager.getCategorySureThreshold();
-
-    // Immediate classification for complaints
-    if (isComplaining) {
-        return complainMarker;
-    }
-
-    let candidateCategories = new Map();
-
-    // Store Gossip & Question Categories
-    if (isAskingQuestion) {
-        candidateCategories.set(askQuestionMarker, askingQuestionCategoryScore);
-    }
-    if (isGossiping) {
-        candidateCategories.set(gossipMarker, gossipCategoryScore);
-    }
-
-    let newKnowledgeCategoryScore = 0;
-    let updateKnowledgeCategoryScore = 0;
-
-    // Check for New or Updated Knowledge ONLY if NOT Gossip AND NOT a Question
-    if (!isGossiping && !isAskingQuestion) {
-        newKnowledgeCategoryScore = await getNewKnowledgeMarkerCategoryScore(conversationSet, userMessage);
-        if (newKnowledgeCategoryScore >= configManager.getCategorySureThreshold()) {
-            candidateCategories.set(newKnowledgeMarker, newKnowledgeCategoryScore);
-        } else {
-            updateKnowledgeCategoryScore = await getUpdateKnowledgeMarkerCategoryScore(conversationSet, userMessage);
-            if (updateKnowledgeCategoryScore >= configManager.getCategorySureThreshold()) {
-                candidateCategories.set(updateKnowledgeMarker, updateKnowledgeCategoryScore);
-            }
-        }
-    }
-
-    // Select Category with Highest Confidence Score
-    let bestCategory = uncategorizedMarker;
-    let maxScore = configManager.getCategorySureThreshold();
-
-    candidateCategories.forEach((score, cat) => {
-        if (score > maxScore) {
-            maxScore = score;
-            bestCategory = cat;
-        }
-    });
-
-    log(`Gossip Score: ${gossipCategoryScore}, Question Score: ${askingQuestionCategoryScore}, New Knowledge Score: ${newKnowledgeCategoryScore}, Update Knowledge Score: ${updateKnowledgeCategoryScore}, Complain Score: ${complainCategoryScore}`);
-
-    return bestCategory;
 }
 
 async function shortenMessage(message) {
@@ -383,34 +119,6 @@ export async function consolidateConversation(conversationSet = new Set()) {
     return newConversationSet;
 }
 
-/** Consolidate Conversation */
-/*export async function consolidateConversation(conversationSet = new Set()) {
-    const newConversationSet = new Set();
-    let summary = "";
-    let lastSumamry = "";
-    for (const conversation of conversationSet) {
-        let thisSummary = conversation.summary?.replace(/[\n\r]/g, ' ').trim();
-        if (lastSumamry && thisSummary.startsWith(lastSumamry)) {
-            summary = thisSummary;
-        } else {
-            summary = summary + (summary.trim().length> 0 ? messageSeperator : "") + thisSummary;
-        }
-        lastSumamry = thisSummary;
-        let userMessage = conversation.userMessage.replace(/[\n\r]/g, ' ').trim();
-        let aiMessage = conversation.aiMessage.replace(/[\n\r]/g, ' ').trim();
-        summary = await summarizeConversation(summary, userMessage, aiMessage);
-        if (userMessage.length > configManager.getConsolidateConversationThreshold()) {
-            userMessage = await shortenMessage(userMessage);
-        }
-        if (aiMessage.length > configManager.getConsolidateConversationThreshold()) {
-            aiMessage = await shortenMessage(aiMessage);
-        }
-        newConversationSet.add({summary, userMessage, aiMessage});
-        
-    }
-    return newConversationSet;
-}*/
-
 export async function getLlmSpec() {
     let llmDetail = await llm.show({model: configManager.getAiModel()});
     let spec = {
@@ -429,11 +137,11 @@ let generatePrompt = function (conversationSet, userMessage) {
     let prompt = `
     Instruction Start:
     ### **Response Rules:**
-    - Use the given key knowledge when relevant.
-    - If the user asks a question covered in key knowledge, answer accordingly.
+    - Use the given key knowledge between "Conversation History Start:" and "Conversation History End." when relevant.
+    - If the user asks a question covered in key knowledge between Conversation History Start and Conversation History End, answer accordingly.
     - If the question is not covered, use general knowledge.
     - Do not repeat the user's question in your response.
-    - Do not mention "conversation history" or "past memory" in responses.
+    - Do not mention "Conversation History" or "past memory" in responses.
     - Keep responses **concise and relevant**.
     Instruction End.
     ${keyKnowledge}
@@ -444,7 +152,7 @@ let generatePrompt = function (conversationSet, userMessage) {
 }
 
 /** Generate Conversation History Prompt */
-let generateConversationHistoryPrompt = function (conversationSet) {
+export let generateConversationHistoryPrompt = function (conversationSet) {
     let prompt = //"### **Conversation History:**\n" + 
     "Conversation History Start:\n";
     conversationSet.forEach(conversation => {
@@ -460,7 +168,7 @@ let getDynamicKeepAlive = function () {
 };
 
 /** AI Call (Uses `generate()`) */
-async function callGenerateAI(prompt, system = "", context = [], stream = false, onToken = null) {
+export async function callGenerateAI(prompt, system = "", context = [], stream = false, onToken = null) {
     lastInteractionTime = Date.now();
 
     const llmResponse = await llm.generate({
@@ -479,8 +187,8 @@ async function callGenerateAI(prompt, system = "", context = [], stream = false,
     if (stream) {
         let responseText = "";
         for await (const chunk of llmResponse) {
-            if (chunk != null && chunk !== undefined && chunk.message != null && chunk.message !== undefined) {
-                const token = chunk.message.content;
+            if (chunk != null && chunk !== undefined && chunk.response != null && chunk.response !== undefined) {
+                const token = chunk.response;
                 responseText += token;
                 if (onToken) {
                     onToken(token); // Send token incrementally if callback provided
@@ -494,7 +202,7 @@ async function callGenerateAI(prompt, system = "", context = [], stream = false,
 }
 
 /** AI Call (Uses `chat()`) */
-async function callChatAI(system, userMessage, conversationSet = [], stream = false, onToken = null) {
+export async function callChatAI(system, userMessage, conversationSet = [], stream = false, onToken = null) {
     lastInteractionTime = Date.now(); // Update timestamp on each request
 
     let messages = [{ role: "system", content: system }];
@@ -547,12 +255,6 @@ const summarizeConversation = async function (oldSummary, userMessage, aiMessage
     }
     return result;
 };
-
-
-function extractNumber(str) {
-    const match = str.match(/\d+/); // Find the first sequence of digits
-    return match ? parseInt(match[0], 10) : NaN;
-}
 
 async function initialize() {
     const llmName = configManager.getAiModel();

@@ -10,6 +10,9 @@
 import express from "express";
 import bodyParser from "body-parser";
 import AI_Memory from "../core/index.js"; 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json');
 
 const app = express();
 app.use(bodyParser.json());
@@ -94,6 +97,13 @@ app.post("/config", (req, res) => {
 app.get("/spec", async (req, res) => {
     let spec = await AI_Memory.getLlmSpec();
     res.json(spec);
+});
+
+app.get("/system", async (req, res) => {
+    let system = {
+        version
+    }
+    res.json(system);
 });
 // Start Server
 const HOST = AI_Memory.configManager.getHost();
