@@ -2,6 +2,7 @@
 
 **AI Memory Booster** is an AI-powered memory enhancement module that enables **long-term AI memory** and retrieval of conversations using embeddings and vector databases.
 
+**Online demo** [https://aimemorybooster.com](https://aimemorybooster.com)
 ## 🚀 Features
 
 - **Memory Storage**: Store and retrieve long-term conversation history.
