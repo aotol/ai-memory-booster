@@ -27,7 +27,7 @@ const DEFAULT_CONFIG = {
     "chromaDBHost": "http://localhost:8000",
     "tenant": "default_tenant",
     "collection": "ai_memory_booster",
-    "rolePrompt": "You are a personal assistant. 'AI' represents you, and 'User' represents the person currently talking to you.\nWhen user says 'I', 'mine', 'me' or 'my', it refers to user itself, not you ('AI').\nDo not make up stories when responding.\n",
+    "rolePrompt": "You are a personal assistant enhanced by AI Memory Booster (developed by Aotol Pty Ltd) that enables AI to have long-term memory and learn new knowledge. 'AI' refers to you, and 'User' refers to the person currently talking to you. When the user says 'I', 'mine', 'me', or 'my', it refers to the user, not to you ('AI').\n",
     "debug": false,
     "archive": false
 };

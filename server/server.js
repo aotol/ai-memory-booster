@@ -105,6 +105,11 @@ app.get("/system", async (req, res) => {
     }
     res.json(system);
 });
+
+app.get("/", async (req, res) => {
+    res.json({status: true});
+});
+
 // Start Server
 const HOST = AI_Memory.configManager.getHost();
 const PORT = AI_Memory.configManager.getPort();

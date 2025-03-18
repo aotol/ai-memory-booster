@@ -10,7 +10,7 @@
     "start": "node server/server.js"
   },
   "keywords": ["AI", "memory", "chatbot", "embeddings", "LLM"],
-  "author": "Zhan Zhang",
+  "author": "Aotol Pty Ltd <zhan@aotol.com>",
   "license": "MIT",
   "type": "module",
   "dependencies": {
