@@ -26,19 +26,18 @@ export async function POST(req) {
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-
+                let buffer = "";
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
                     const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split("\n");
-
+                    buffer += chunk;
+                    const lines = buffer.split("\n\n");
+                    buffer = lines.pop();
                     for (const line of lines) {
-                        if (line.startsWith("data: ")) {
-                            const token = line.replace("data: ", "");
-                            controller.enqueue(token);
-                        }
+                        const token = line.replace("data: ", "");
+                        controller.enqueue(token);
                     }
                 }
                 controller.close();

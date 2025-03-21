@@ -9,6 +9,7 @@
  */
 import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkBreaks from 'remark-breaks';
 
 export default function Home() {
     const [messages, setMessages] = useState([]);
@@ -133,6 +134,7 @@ export default function Home() {
 
             const data = await response.json();
             setRetrievedMemories(data.reverse());
+            alert("Memory Retrieved.");
         } catch (error) {
             console.error("Error retrieving memory:", error);
         }
@@ -263,7 +265,9 @@ export default function Home() {
                     <div key={index} className={`p-2 my-1 ${msg.sender === "User" ? "text-blue-700" : "text-green-700"}`}>
                         <div className="inline-flex">
                             <strong>{msg.sender}:&nbsp;</strong>
-                            <ReactMarkdown>{msg.text}</ReactMarkdown>
+                            <span>
+                                <ReactMarkdown remarkPlugins={[remarkBreaks]}>{msg.text}</ReactMarkdown>
+                            </span>
                         </div>
                     </div>
                 ))}

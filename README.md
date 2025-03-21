@@ -3,30 +3,71 @@
 **AI Memory Booster** is an AI-powered memory enhancement module that enables **long-term AI memory** and retrieval of conversations using embeddings and vector databases.
 
 **Online demo** [https://aimemorybooster.com](https://aimemorybooster.com)
+
+## 📚 Table of Contents
+
+- [🚀 Features](#-features)
+- [📦 Installation](#-installation)
+  - [🔤 Quick Setup for MacOS/Linux Users](#-quick-setup-for-macoslinux-users)
+  - [Manual Install Instruction](#manual-install-instruction)
+    - [Pre-requisites](#pre-requisites)
+    - [Install Ollama](#install-ollama)
+    - [Install ChromaDB](#install-chromadb)
+    - [Install AI Memory Booster via npm](#install-ai-memory-booster-via-npm)
+- [🎯 Usage](#-usage)
+- [🔧 Configuration](#-configuration)
+  - [Example config.json](#example-configjson)
+  - [ConfigManager Usage](#configmanager-usage)
+- [🔧 Development](#-development)
+- [📜 License](#-license)
+- [📩 Contact](#-contact)
+
 ## 🚀 Features
 
-- **Memory Storage**: Store and retrieve long-term conversation history.
-- **Embeddings Support**: Utilize FAISS and ChromaDB for efficient AI memory.
-- **Flexible Deployment**: Use AI Memory Booster as an npm module or run it as an API service to make RESTful API calls.
-- **Built-in UI**: Manage configurations easily through the integrated UI component.
-- **Extensible & Open-Source**: Built for developers to integrate into AI chatbots and automation tools.
+- **Fully deployable on-premise**: Run locally to maintain full control, meet strict compliance, and ensure enhanced data privacy.
+- **Self-learning capability**: Continuously adapts to user environments for more personalized performance over time.
+- **Permanent long-term memory**: Retains information across sessions and system restarts.
+- **Offline functionality**: Operates without internet access, improving performance and reducing external dependencies.
+- **LLM-agnostic**: Integrates with any LLM based on your infrastructure or budget.
+- **Simple to manage**: Configure easily using a JSON file or via the built-in admin portal.
+- **Seamless integration**: Provides an NPM package, REST API, and a web interface for plug-and-play deployment.
+- **Fully user-owned**: Avoids reliance on third-party AI services, lowering costs and boosting independence.
 
 ## 📦 Installation
 
-### Pre-requisites
+### 🔤 Quick Setup for MacOS/Linux Users
+
+For MacOS or Linux users, we provide a script to automate the setup process:
+
+```sh
+./install.sh
+```
+
+This script will:
+- Install dependencies
+- Setup environment variables (`.env.local`)
+- Launch required services (e.g., ChromaDB)
+
+Make sure the script has executable permission:
+```sh
+chmod +x install.sh
+```
+
+### Manual Install Instruction
+#### Pre-requisites
 Before running AI Memory Booster, ensure that you have **Ollama** and **ChromaDB** installed.
 
-#### Install Ollama
+##### Install Ollama
 Follow the official installation guide at: [https://ollama.ai/](https://ollama.ai/)
 
-#### Install ChromaDB
+##### Install ChromaDB
 Ensure ChromaDB is installed and running:
 ```sh
 pip install chromadb
 chroma run --path ./chroma_db
 ```
 
-### Install AI Memory Booster via npm:
+#### Install AI Memory Booster via npm:
 ```sh
 npm install ai-memory-booster
 ```
@@ -94,14 +135,14 @@ const response = await AI_Memory.generate("How's the weather today?");
 console.log(response); // "It is raining."
 ```
 
-## 🛠 Configuration
+## 🔧 Configuration
 
 AI Memory Booster allows full customization through `config.json`. Users can modify AI model settings, server configurations, memory management, and ChromaDB parameters. The configuration can be updated in two ways:
 
 - **Directly modifying `config.json`**
 - **Using AI Memory Booster UI for easy configuration updates**
 
-### Example `config.json`:
+### Example config.json:
 
 ```js
 {
@@ -158,6 +199,7 @@ cd ai-memory-booster/web/ai-memory-ui/
 npm run dev
 ```
 Make sure you have set the environment variable: `AI_MEMORY_BOOSTER_API_URL` to identify where AI Memory Booster API service is running.
+
 e.g.:
 ```sh
 export AI_MEMORY_BOOSTER_API_URL="http://localhost:4000"
@@ -169,7 +211,9 @@ AI_MEMORY_BOOSTER_API_URL=http://localhost:4000
 
 ## 📜 License
 
-**MIT License** - Free for personal and research use. AI Memory Booster is open-source under the MIT License. If you require enterprise support or commercial licensing, please contact us.
+**MIT License** - AI Memory Booster versions **1.x.x** are free and open-source under the MIT License.
+
+> **Note:** Starting from version **2.0.0**, AI Memory Booster will be available as a **commercial version** with multi-tenant (user) support and advanced features. For commercial licensing and inquiries about **2.0.0** and above, please contact **zhan@aotol.com**.
 
 ## 📩 Contact
 
@@ -180,4 +224,3 @@ Website: **[https://github.com/aotol/ai-memory-booster](https://github.com/aotol
 ---
 
 🚀 **Start building with AI Memory Booster today!**
-
