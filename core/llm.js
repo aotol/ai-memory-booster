@@ -22,6 +22,11 @@ export const ollamaEmbeddings = new OllamaEmbeddings({ model: textEmbeddingModel
 
 /** Common AI Processing Function */
 async function processAIInteraction(userMessage, mode, stream = false, onToken = null) {
+    if (!userMessage) {
+        throw new Error("UserMessage is null.");
+    } else if (userMessage.length > (configManager.getMaxUserMessageCharacterLimit() || 10000)) {
+        throw new Error("UserMessage is too long.");
+    }
     const conversationSet = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
     let system = configManager.getRolePrompt();
     let aiMessage;

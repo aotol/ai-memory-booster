@@ -154,6 +154,7 @@ AI Memory Booster allows full customization through `config.json`. Users can mod
   "extendedKeepAlive": 10000, // Extended duration (ms) the LLM remains active if no other requests arrive
   "similarityResultCount": 3, // Number of similar records retrieved from the database
   "categorySureThreshold": 49, // Threshold for AI to confidently classify a response
+  "maxUserMessageCharacterLimit": 10000, //Max user message length allowed
   "summaryCharacterLimit": 256, // Maximum character length for conversation summaries
   "dimension": 768, // Dimensionality of vector embeddings
   "similarityThreshold": 0.7, // Threshold for similarity-based searches

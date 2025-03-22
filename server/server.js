@@ -32,8 +32,13 @@ app.post("/store-memory", async (req, res) => {
 
 app.post("/retrieve-memory", async (req, res) => {
     const { userMessage } = req.body;
-    const response = await AI_Memory.retrieveMemory(userMessage);
-    res.json(response);
+    try {
+        const response = await AI_Memory.retrieveMemory(userMessage);
+        res.json(response);
+    } catch (err) {
+        res.status(500).json({ error: err.message || "Internal server error." });
+    }
+    
 });
 
 app.post("/chat", async (req, res) => {
@@ -47,10 +52,13 @@ app.post("/chat", async (req, res) => {
         res.end();
         return;
     }
-    
-    await AI_Memory.chat(userMessage, true, (token) => {
-        res.write(`data: ${token}\n\n`);
-    });
+    try {
+        await AI_Memory.chat(userMessage, true, (token) => {
+            res.write(`data: ${token}\n\n`);
+        });
+    } catch (err) {
+        res.write(`data: Error: ${err.message || "Internal server error."}\n\n`);
+    }
     res.end();
 });
 
@@ -65,10 +73,13 @@ app.post("/generate", async (req, res) => {
         res.end();
         return;
     }
-    
-    await AI_Memory.generate(userMessage, true, (token) => {
-        res.write(`data: ${token}\n\n`);
-    });
+    try {
+        await AI_Memory.generate(userMessage, true, (token) => {
+            res.write(`data: ${token}\n\n`);
+        });
+    } catch (err) {
+        res.write(`data: Error: ${err.message || "Internal server error."}\n\n`);
+    }
     res.end();
 });
 
