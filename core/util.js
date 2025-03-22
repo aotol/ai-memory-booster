@@ -108,9 +108,9 @@ async function mergeConversationsByType(conversationList) {
 
         //Merge the message
         let mergedMessage = {
-            summary: uniqueLastOccurrence(cluster.map(c => c.summary)).join(messageSeperator), //Merge summary (seperate by messageSeperator)
-            userMessage: uniqueLastOccurrence(cluster.map(c => c.userMessage)).join(messageSeperator), //Merge user message (seperate by messageSeperator)
-            aiMessage: uniqueLastOccurrence(cluster.map(c => c.aiMessage)).join(messageSeperator),  // Merge AI responses (seperate by messageSeperator)
+            summary: uniqueLastOccurrence(cluster.map(c => c.summary)).join(messageSeperator), //Merge summary (separate by messageSeperator)
+            userMessage: uniqueLastOccurrence(cluster.map(c => c.userMessage)).join(messageSeperator), //Merge user message (separate by messageSeperator)
+            aiMessage: uniqueLastOccurrence(cluster.map(c => c.aiMessage)).join(messageSeperator),  // Merge AI responses (separate by messageSeperator)
             userMessageWeight: baseConversation.userMessageWeight,  // Use highest weight for merged message
             aiMessageWeight: baseConversation.aiMessageWeight, // AI weight currently is not used
             timestamp: Math.max(...cluster.map(c => c.timestamp))  // Keep latest timestamp as the merged message
