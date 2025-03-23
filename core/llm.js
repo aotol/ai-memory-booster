@@ -12,7 +12,7 @@ import * as Memory from "./memory.js"
 import { log } from "./debug.js";
 import { OllamaEmbeddings } from "@langchain/ollama";
 import {learnFromChat} from "./learn.js";
-import {messageSeperator} from "./util.js";
+import {messageSeparator} from "./util.js";
 let lastInteractionTime = Date.now();
 const llm = new Ollama();
 const textEmbeddingModel = "nomic-embed-text:latest";
@@ -101,7 +101,7 @@ export async function consolidateConversation(conversationSet = new Set()) {
         }
 
         // Generate final consolidated summary from unique elements
-        summary = [...seenSummaries].join(messageSeperator);
+        summary = [...seenSummaries].join(messageSeparator);
 
         // Summarize the conversation
         let userMessage = conversation.userMessage.replace(/[\n\r]/g, ' ').trim();
@@ -251,7 +251,7 @@ const summarizeConversation = async function (oldSummary, userMessage, aiMessage
     const threshold = configManager.getConsolidateConversationThreshold();
     let result;
     if (oldSummary?.trim()) { // If old summary exists and already includes the message, return as-is
-        result = oldSummary.includes(userMessage) ? oldSummary : `${oldSummary}${messageSeperator}${userMessage}`;
+        result = oldSummary.includes(userMessage) ? oldSummary : `${oldSummary}${messageSeparator}${userMessage}`;
     } else { // Default case: return user message
         result = userMessage;
     }

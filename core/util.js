@@ -1,7 +1,7 @@
 import configManager from "./configManager.js";
 import {ollamaEmbeddings} from "./llm.js";
 
-export let messageSeperator = " | ";
+export let messageSeparator = " | ";
 /**
  * Sort conversations via weight and timestamp (ascending), return as array
  */
@@ -108,9 +108,9 @@ async function mergeConversationsByType(conversationList) {
 
         //Merge the message
         let mergedMessage = {
-            summary: uniqueLastOccurrence(cluster.map(c => c.summary)).join(messageSeperator), //Merge summary (separate by messageSeperator)
-            userMessage: uniqueLastOccurrence(cluster.map(c => c.userMessage)).join(messageSeperator), //Merge user message (separate by messageSeperator)
-            aiMessage: uniqueLastOccurrence(cluster.map(c => c.aiMessage)).join(messageSeperator),  // Merge AI responses (separate by messageSeperator)
+            summary: uniqueLastOccurrence(cluster.map(c => c.summary)).join(messageSeparator), //Merge summary (separate by messageSeparator)
+            userMessage: uniqueLastOccurrence(cluster.map(c => c.userMessage)).join(messageSeparator), //Merge user message (separate by messageSeparator)
+            aiMessage: uniqueLastOccurrence(cluster.map(c => c.aiMessage)).join(messageSeparator),  // Merge AI responses (separate by messageSeparator)
             userMessageWeight: baseConversation.userMessageWeight,  // Use highest weight for merged message
             aiMessageWeight: baseConversation.aiMessageWeight, // AI weight currently is not used
             timestamp: Math.max(...cluster.map(c => c.timestamp))  // Keep latest timestamp as the merged message
