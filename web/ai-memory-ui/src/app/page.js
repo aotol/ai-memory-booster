@@ -198,12 +198,15 @@ export default function Home() {
     };
 
     // Fetch Config
-    const fetchConfig = async () => {
+    const fetchConfig = async (confirm = false) => {
         try {
             const response = await fetch("/api/config");
             const data = await response.json();
             setConfig(data);
             setConfigText(JSON.stringify(data, null, 2)); // Pretty JSON format
+            if (confirm) {
+                alert("Config reloaded.");
+            }
         } catch (error) {
             console.error("Error fetching config:", error);
         }
@@ -385,7 +388,7 @@ export default function Home() {
             {/* Config Management Section */}
             <div className="mt-6 w-full max-w-2xl bg-white shadow-lg rounded-lg p-4">
                 <h2 className="text-lg font-semibold">Configuration Management</h2>
-                <button className="bg-gray-500 text-white px-4 py-2 rounded-lg mt-2" onClick={fetchConfig}>
+                <button className="bg-gray-500 text-white px-4 py-2 rounded-lg mt-2" onClick={() => fetchConfig(true)}>  
                     Reload Config
                 </button>
                 <textarea
