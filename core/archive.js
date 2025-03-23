@@ -1,6 +1,9 @@
-import fs from 'fs';
-import path from 'path';
-import {log} from './debug.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
+import { log } from './debug.js';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 /** Archive memory to a JSON file and delete from ChromaDB */
 export function archiveToFile(conversation) {
     if (!conversation) {

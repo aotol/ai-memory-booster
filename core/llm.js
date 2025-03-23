@@ -27,14 +27,14 @@ async function processAIInteraction(userMessage, mode, stream = false, onToken =
     } else if (userMessage.length > (configManager.getMaxUserMessageCharacterLimit() || 10000)) {
         throw new Error("UserMessage is too long.");
     }
-    const conversationSet = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
+    const conversationArray = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
     let system = configManager.getRolePrompt();
     let aiMessage;
     let executionStartTime = Date.now();
     if (mode === "chat") {
-        aiMessage = await callChatAI(system, userMessage, conversationSet, stream, onToken);
+        aiMessage = await callChatAI(system, userMessage, conversationArray, stream, onToken);
     } else if (mode === "generate") {
-        let prompt = generatePrompt(conversationSet, userMessage);
+        let prompt = generatePrompt(conversationArray, userMessage);
         aiMessage = await callGenerateAI(prompt, system, [], stream, onToken);
     } else {
         throw new Error("Invalid mode: must be 'chat' or 'generate'");
@@ -42,8 +42,8 @@ async function processAIInteraction(userMessage, mode, stream = false, onToken =
 
     let executionTime = Date.now() - executionStartTime;
     log(`Execution time for ${mode}: ${executionTime} milliseconds`);
-    const cacheId = await Memory.cacheConversation(userMessage, aiMessage, conversationSet);
-    learnFromChat(conversationSet, cacheId, userMessage, aiMessage);
+    const cacheId = await Memory.cacheConversation(userMessage, aiMessage, conversationArray);
+    learnFromChat(conversationArray, cacheId, userMessage, aiMessage);
     
     return aiMessage;
 }
@@ -294,4 +294,6 @@ async function initialize() {
     }
 }
 
-await initialize();
+if (process.env.NODE_ENV !== 'test') {
+    await initialize();
+}

@@ -8,8 +8,8 @@
  */
 
 import configManager from "./configManager.js";
-import fs from "fs";
-import path from "path";
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Ensure the logs directory exists
 const logDirectory = "./logs";

@@ -6,8 +6,8 @@
  * 
  * Author: Zhan Zhang <zhan@aotol.com>
  */
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path'
 
 const CONFIG_FILE = path.join( "./config.json"); // Ensure the file is stored in the same directory as `server.js`
 

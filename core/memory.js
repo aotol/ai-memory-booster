@@ -35,7 +35,9 @@ async function initializeSqlite() {
             id TEXT PRIMARY KEY,
             summary TEXT,
             userMessage TEXT,
+            userMessageWeight INTEGER,
             aiMessage TEXT,
+            aiMessageWeight INTEGER,
             embedding BLOB,
             timestamp INTEGER
         );
@@ -224,7 +226,7 @@ export function updatetMemoryCache(memory) {
         throw new Error(`Memory with ID ${memory.id} not found in cache.`);
     }
 }
-
+//It returns array
 export async function readMemoryFromCacheAndDB(userMessage, similarityResultCount) {
     const conversationDBSet = await readMemoryFromDB(userMessage, similarityResultCount);
     const conversationCacheSet = await readMemoryFromCache(userMessage, similarityResultCount);

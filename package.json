@@ -7,20 +7,30 @@
     "ai-memory-booster": "./server/server.js"
   },
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest --coverage"
   },
-  "keywords": ["AI", "memory", "chatbot", "embeddings", "LLM"],
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "keywords": [
+    "AI",
+    "memory",
+    "chatbot",
+    "embeddings",
+    "LLM"
+  ],
   "author": "Aotol Pty Ltd <zhan@aotol.com>",
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "express": "^4.21.2",
-    "body-parser": "^1.20.3",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
-    "faiss-node": "^0.5.1",
-    "chromadb": "^1.10.4",
     "@langchain/ollama": "^0.2.0",
-    "ollama": "^0.5.14"
+    "body-parser": "^1.20.3",
+    "chromadb": "^1.10.4",
+    "express": "^4.21.2",
+    "faiss-node": "^0.5.1",
+    "ollama": "^0.5.14",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
   }
 }
