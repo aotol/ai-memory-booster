@@ -46,14 +46,14 @@ app.post("/chat", async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    const { userMessage } = req.body;
+    const { userMessage, timeZone } = req.body;
     if (!userMessage) {
         res.write("data: Error: userMessage is required\n\n");
         res.end();
         return;
     }
     try {
-        await AI_Memory.chat(userMessage, true, (token) => {
+        await AI_Memory.chat(userMessage, timeZone, true, (token) => {
             res.write(`data: ${token}\n\n`);
         });
     } catch (err) {
@@ -67,14 +67,14 @@ app.post("/generate", async (req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
 
-    const { userMessage } = req.body;
+    const { userMessage, timeZone } = req.body;
     if (!userMessage) {
         res.write("data: Error: userMessage is required\n\n");
         res.end();
         return;
     }
     try {
-        await AI_Memory.generate(userMessage, true, (token) => {
+        await AI_Memory.generate(userMessage, timeZone, true, (token) => {
             res.write(`data: ${token}\n\n`);
         });
     } catch (err) {

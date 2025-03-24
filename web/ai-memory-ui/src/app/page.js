@@ -49,6 +49,7 @@ export default function Home() {
     const sendMessage = async () => {
         if (!chatInput.trim() || isSending) return;
         const userMessage = chatInput.trim();
+        const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         setChatInput("");
     
         // Ensure user message is displayed immediately
@@ -61,7 +62,7 @@ export default function Home() {
             const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userMessage }),
+                body: JSON.stringify({ userMessage, timeZone: timeZone }),
             });
     
             if (!response.body) return;
@@ -93,7 +94,7 @@ export default function Home() {
         } finally {
             setIsSending(false); // Re-enable button after response
         }
-    };    
+    };
 
     // Store Memory
     const storeMemory = async () => {

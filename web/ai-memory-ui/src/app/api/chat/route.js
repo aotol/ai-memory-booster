@@ -8,7 +8,7 @@
  */
 
 export async function POST(req) {
-    const { userMessage } = await req.json();
+    const { userMessage, timezone } = await req.json();
 
     return new Response(
         new ReadableStream({
@@ -16,7 +16,7 @@ export async function POST(req) {
                 const response = await fetch(`${process.env.AI_MEMORY_BOOSTER_API_URL}/chat`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ userMessage }),
+                    body: JSON.stringify({ userMessage, timezone }),
                 });
 
                 if (!response.body) {

@@ -244,3 +244,10 @@ export function extractNumber(str) {
     const match = str.match(/\d+/); // Find the first sequence of digits
     return match ? parseInt(match[0], 10) : NaN;
 }
+
+export function getClientTime(timeZone = 'UTC') {
+    const now = new Date();
+    const options = { timeZone: timeZone, hour12: false, timeZoneName: 'short' };
+    const parts = now.toLocaleString('en-US', options);
+    return parts.replace(/,? (GMT|UTC)/, ' $1');
+}

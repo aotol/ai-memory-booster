@@ -12,7 +12,7 @@ import * as Memory from "./memory.js"
 import { log } from "./debug.js";
 import { OllamaEmbeddings } from "@langchain/ollama";
 import {learnFromChat} from "./learn.js";
-import {messageSeparator} from "./util.js";
+import {messageSeparator, getClientTime} from "./util.js";
 let lastInteractionTime = Date.now();
 const llm = new Ollama();
 const textEmbeddingModel = "nomic-embed-text:latest";
@@ -21,7 +21,7 @@ const resultDrivingPrompt = "Only give the result and do not say anything else. 
 export const ollamaEmbeddings = new OllamaEmbeddings({ model: textEmbeddingModel });
 
 /** Common AI Processing Function */
-async function processAIInteraction(userMessage, mode, stream = false, onToken = null) {
+async function processAIInteraction(userMessage, timeZone, mode, stream = false, onToken = null) {
     if (!userMessage) {
         throw new Error("UserMessage is null.");
     } else if (userMessage.length > (configManager.getMaxUserMessageCharacterLimit() || 10000)) {
@@ -29,6 +29,9 @@ async function processAIInteraction(userMessage, mode, stream = false, onToken =
     }
     const conversationArray = await Memory.readMemoryFromCacheAndDB(userMessage, configManager.getSimilarityResultCount());
     let system = configManager.getRolePrompt();
+    if (system && timeZone)  {
+        system = system + " The current user time is " + getClientTime(timeZone) + ". ";
+    }
     let aiMessage;
     let executionStartTime = Date.now();
     if (mode === "chat") {
@@ -49,13 +52,13 @@ async function processAIInteraction(userMessage, mode, stream = false, onToken =
 }
 
 /** AI Chat */
-export async function chat(userMessage, stream = false, onToken = null) {
-    return await processAIInteraction(userMessage, "chat", stream, onToken);
+export async function chat(userMessage, timeZone, stream = false, onToken = null) {
+    return await processAIInteraction(userMessage, timeZone, "chat", stream, onToken);
 }
 
 /** AI Generate */
-export async function generate(userMessage, stream = false, onToken = null) {
-    return await processAIInteraction(userMessage, "generate", stream, onToken);
+export async function generate(userMessage, timeZone, stream = false, onToken = null) {
+    return await processAIInteraction(userMessage, timeZone, "generate", stream, onToken);
 }
 
 async function shortenMessage(message) {
@@ -207,7 +210,7 @@ export async function callGenerateAI(prompt, system = "", context = [], stream =
 }
 
 /** AI Call (Uses `chat()`) */
-export async function callChatAI(system, userMessage, conversationSet = [], stream = false, onToken = null) {
+export async function callChatAI(system = "", userMessage, conversationSet = [], stream = false, onToken = null) {
     lastInteractionTime = Date.now(); // Update timestamp on each request
 
     let messages = [{ role: "system", content: system }];
