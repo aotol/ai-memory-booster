@@ -7,7 +7,7 @@
  * Author: Zhan Zhang <zhan@aotol.com>
  */
 export async function POST(req) {
-    const { userMessage, timezone } = await req.json();
+    const { userMessage, timeZone } = await req.json();
 
     return new Response(
         new ReadableStream({
@@ -15,7 +15,7 @@ export async function POST(req) {
                 const response = await fetch(`${process.env.AI_MEMORY_BOOSTER_API_URL}/generate`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ userMessage, timezone }),
+                    body: JSON.stringify({ userMessage, timeZone }),
                 });
 
                 if (!response.body) {

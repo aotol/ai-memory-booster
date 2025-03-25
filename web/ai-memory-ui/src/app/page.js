@@ -62,7 +62,7 @@ export default function Home() {
             const response = await fetch(endpoint, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userMessage, timeZone: timeZone }),
+                body: JSON.stringify({ userMessage, timeZone }),
             });
     
             if (!response.body) return;
