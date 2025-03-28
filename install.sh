@@ -75,7 +75,7 @@ pm2 start ./server/server.js --name ai-memory-booster-api
 # ----------- Setup Web UI (Next.js) ----------- #
 cd ./web/ai-memory-ui
 echo "AI_MEMORY_BOOSTER_API_URL=http://localhost:4000" > .env.local
-npm install
+npm install --include=dev
 npm run build
 pm2 start "npx next start -p 3000" --name ai-memory-booster-ui
 
