@@ -23,10 +23,10 @@ app.post("/store-memory", async (req, res) => {
     let id;
     try {
         id = await AI_Memory.storeMemory(summary, userMessage, aiMessage);
-        res.json({ success: true, message: `Memory stored with ID: ${id}` });
+        res.json({ status: true, message: `Memory stored with ID: ${id}` });
     } catch (err) {
         console.log(err);
-        res.json({ success: false, message: `Memory failed to be stored: ${err}` });
+        res.json({ status: false, message: `Memory failed to be stored: ${err}` });
     }
 });
 
@@ -93,8 +93,8 @@ app.get("/forget", async (req, res) => {
         result = await AI_Memory.forgetAll(); // Forget all memories
     }
     let response = result
-    ? { success: true, message: id ? `Memory with ID ${id} has been deleted!` : "All memories have been deleted!" }
-    : { success: false, message: id ? `No memory found with ID ${id}!` : "There is nothing to delete!" };
+    ? { status: true, message: id ? `Memory with ID ${id} has been deleted!` : "All memories have been deleted!" }
+    : { status: false, message: id ? `No memory found with ID ${id}!` : "There is nothing to delete!" };
     res.json(response);
 });
 
@@ -102,7 +102,7 @@ app.get("/forget", async (req, res) => {
 app.get("/config", (req, res) => res.json(AI_Memory.configManager.getAllConfig()));
 app.post("/config", (req, res) => {
     AI_Memory.configManager.setAllConfig(req.body);
-    res.json({ success: true, message: "Configuration updated", config: AI_Memory.configManager.getAllConfig() });
+    res.json({ status: true, message: "Configuration updated", config: AI_Memory.configManager.getAllConfig() });
 });
 
 app.get("/spec", async (req, res) => {
