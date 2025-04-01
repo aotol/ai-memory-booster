@@ -106,7 +106,7 @@ const configManager = {
     setTemperature: (value) => { config.temperature = value; saveConfig(config); },
     setTopP: (value) => { config.topP = value; saveConfig(config); },
     setDebug: (value) => { config.debug = value; saveConfig(config); },
-    setArchive: (value) => {config.archive = value; setArchive(config)},
+    setArchive: (value) => {config.archive = value; saveConfig(config)},
 
     // Get all config
     getAllConfig: () => config,
