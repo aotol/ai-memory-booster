@@ -62,8 +62,7 @@ function writeLog(message) {
 // Main log function
 export async function log(message) {
     if (configManager.isDebug()) {
-        const logEntry = `${getFormattedDateTime()} ${message}`;
-        console.log(logEntry);
-        writeLog(logEntry);
+        console.log(message);
+        writeLog(message);
     }
 }
