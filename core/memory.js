@@ -11,12 +11,13 @@ import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import faiss from "faiss-node";
 import { ChromaClient } from "chromadb";
-import { randomUUID } from "crypto";
+import { randomUUID, createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import configManager from "./configManager.js";
 import {ollamaEmbeddings} from "./llm.js";
 import {log} from "./debug.js";
 import { adjustVectorSize, sortConversationSet, calculateConversationWeight } from "./util.js";
 
+const secret = Buffer.from(configManager.getChromaSecretKey(), "hex"); // 32 bytes for AES-256
 const collectionName = configManager.getCollection(); // ChromaDB Collection
 let chromaClient;
 let collection;
@@ -74,6 +75,22 @@ async function initialize() {
     initializeCache();
 }
 
+function encrypt(text) {
+    const iv = randomBytes(16);
+    const cipher = createCipheriv("aes-256-cbc", Buffer.from(secret), iv);
+    let encrypted = cipher.update(text, "utf8", "hex");
+    encrypted += cipher.final("hex");
+    return iv.toString("hex") + ":" + encrypted;
+}
+
+function decrypt(data) {
+    const [ivHex, encrypted] = data.split(":");
+    const decipher = createDecipheriv("aes-256-cbc", Buffer.from(secret), Buffer.from(ivHex, "hex"));
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+}
+
 export async function cacheConversation(userMessage, aiMessage, conversationSet) {
     const conversationWeight = await calculateConversationWeight(userMessage, aiMessage, conversationSet);
     const userMessageWeight = conversationWeight.userMessageWeight;
@@ -124,6 +141,10 @@ export async function storeMemory(summary, userMessage, userMessageWeight = 0, a
     const id = randomUUID();
     const vector = await ollamaEmbeddings.embedQuery(summary);
     const reducedVector = adjustVectorSize(vector);
+    summary = encrypt(summary);
+    userMessage = encrypt(userMessage);
+    aiMessage = encrypt(aiMessage);
+    
     if (await isChromaDBAvailable()) {
         await collection.add({
             ids: [id],
@@ -318,10 +339,10 @@ let convertChromaResultToConversationSet = function (retrievedMemories) {
                 for (let j = 0; j < ids.length; j++) {
                     const id = ids[j];
                     const distance = memory.distances[i][j] ?? Infinity;
-                    const summary = memory.documents[i][j] || "";
-                    const userMessage = memory.metadatas[i][j]?.userMessage || "";
+                    const summary = decrypt(memory.documents[i][j] || "");
+                    const userMessage = decrypt(memory.metadatas[i][j]?.userMessage || "");
                     const userMessageWeight = memory.metadatas[i][j]?.userMessageWeight || 0;
-                    const aiMessage = memory.metadatas[i][j]?.aiMessage || "";
+                    const aiMessage = decrypt(memory.metadatas[i][j]?.aiMessage || "");
                     const aiMessageWeight = memory.metadatas[i][j]?.aiMessageWeight || 0;
                     const timestamp = memory.metadatas[i][j]?.timestamp || 0;
                     conversationSet.add({ summary, id, distance, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp });
@@ -332,10 +353,10 @@ let convertChromaResultToConversationSet = function (retrievedMemories) {
             for (let i = 0; memory.ids && i < memory.ids.length; i++) {
                 const id = memory.ids[i];
                 const distance = 0;  // `get` does not return distances
-                const summary = memory.documents[i] || "";
-                const userMessage = memory.metadatas[i]?.userMessage || "";
+                const summary = decrypt(memory.documents[i] || "");
+                const userMessage = decrypt(memory.metadatas[i]?.userMessage || "");
                 const userMessageWeight = memory.metadatas[i]?.userMessageWeight || 0;
-                const aiMessage = memory.metadatas[i]?.aiMessage || "";
+                const aiMessage = decrypt(memory.metadatas[i]?.aiMessage || "");
                 const aiMessageWeight = memory.metadatas[i]?.aiMessageWeight || 0;
                 const timestamp = memory.metadatas[i]?.timestamp || 0;
                 conversationSet.add({ summary, id, distance, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp });
@@ -356,13 +377,13 @@ let convertSqliteResultToConversationSet = function (retrievedMemories) {
         const memory = retrievedMemories[i];
         const id = memory.id;
         const distance = memory.distance ?? Infinity;
-        const summary = memory.summary || "";
-        const userMessage = memory.userMessage || "";
+        const summary = decrypt(memory.summary || "");
+        const userMessage = decrypt(memory.userMessage || "");
         const userMessageWeight = memory.userMessageWeight || 0;
-        const aiMessage = memory.aiMessage || "";
+        const aiMessage = decrypt(memory.aiMessage || "");
         const aiMessageWeight = memory.aiMessageWeight || 0;
         const timestamp = memory.timestamp || 0;
-        conversationSet.add(id, distance, summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp);
+        conversationSet.add({id, distance, summary, userMessage, userMessageWeight, aiMessage, aiMessageWeight, timestamp});
     }
     return conversationSet;
 }

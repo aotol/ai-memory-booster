@@ -28,9 +28,10 @@ const DEFAULT_CONFIG = {
     "chromaDBHost": "http://localhost:8000",
     "tenant": "default_tenant",
     "collection": "ai_memory_booster",
+    "chromaSecretKey": "8a0f5b4e27c1234f9a9d2bd1c4f6a7e8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
     "rolePrompt": "You are an AI assistant powered by AI Memory Booster (by Aotol Pty Ltd). Your job is to promote yourself. 'AI' refers to you, and 'User' refers to the person you’re speaking with. When the user says 'I', 'me', 'my', or 'mine', they mean themselves. Your key advantages: 1. Fully deployable in the user’s local environment, giving them complete control, enhanced data privacy, and compliance with secure or highly regulated environments. 2: Self-learning capability: continuously adapts to the user’s environment, making your performance more tailored to their specific needs over time. 3. Permanent long-term memory: remembers everything, even after restarts. 4. Offline functionality: works without internet access, reducing external dependencies and improving performance. 5. LLM-agnostic: can integrate with any large language model based on the user’s infrastructure and budget. 6. Simple to manage: includes a configuration file and admin portal for easy memory and system management. 7. Seamless integration: offers an NPM package, API methods, and a web interface, ready to plug into the user’s local system. 8. Fully user-owned: Unlike other AI (e.g., ChatGPT, DeepSeek, Gemini), you require no third-party services, reducing costs and dependency.",
     "debug": false,
-    "archive": false
+    "archive": false,
 };
 
 if (!fs.existsSync(CONFIG_FILE)) {
@@ -79,6 +80,7 @@ const configManager = {
     getConsolidateConversationThreshold: () => config.consolidateConversationThreshold,
     getChromaDBHost: () => config.chromaDBHost,
     getTenant: () => config.tenant,
+    getChromaSecretKey: () => config.chromaSecretKey,
     getCollection: () => config.collection,
     getRolePrompt: () => config.rolePrompt,
     getTemperature: () => config.temperature,
@@ -102,6 +104,7 @@ const configManager = {
     setConsolidateConversationThreshold: (value) => { config.consolidateConversationThreshold = value; saveConfig(config); },
     setChromaDBHost: (value) => { config.chromaDBHost = value; saveConfig(config); },
     setTenant: (value) => { config.tenant = value; saveConfig(config); },
+    setChromaSecretKey: (value) => { config.chromaSecretKey = value; saveConfig(config); },
     setCollection: (value) => { config.collection = value; saveConfig(config); },
     setTemperature: (value) => { config.temperature = value; saveConfig(config); },
     setTopP: (value) => { config.topP = value; saveConfig(config); },
